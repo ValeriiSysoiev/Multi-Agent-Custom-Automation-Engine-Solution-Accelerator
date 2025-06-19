@@ -13,12 +13,15 @@ from fastapi.staticfiles import StaticFiles
 # Resolve wwwroot path relative to this script
 WWWROOT_PATH = os.path.join(os.path.dirname(__file__), "wwwroot")
 
-# Debugging information
-print(f"Current Working Directory: {os.getcwd()}")
-print(f"Absolute path to wwwroot: {WWWROOT_PATH}")
+# Optional debugging
+DEBUG = os.getenv("FRONTEND_DEBUG", "false").lower() in ("1", "true", "yes")
+if DEBUG:
+    print(f"Current Working Directory: {os.getcwd()}")
+    print(f"Absolute path to wwwroot: {WWWROOT_PATH}")
 if not os.path.exists(WWWROOT_PATH):
     raise FileNotFoundError(f"wwwroot directory not found at path: {WWWROOT_PATH}")
-print(f"Files in wwwroot: {os.listdir(WWWROOT_PATH)}")
+if DEBUG:
+    print(f"Files in wwwroot: {os.listdir(WWWROOT_PATH)}")
 
 app = FastAPI()
 
@@ -59,7 +62,8 @@ async def debug_route():
 # Catch-all route for SPA
 @app.get("/{full_path:path}")
 async def catch_all(full_path: str):
-    print(f"Requested path: {full_path}")
+    if DEBUG:
+        print(f"Requested path: {full_path}")
     app_html_path = os.path.join(WWWROOT_PATH, "app.html")
 
     if os.path.exists(app_html_path):
