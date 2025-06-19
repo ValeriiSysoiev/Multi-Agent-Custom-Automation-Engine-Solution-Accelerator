@@ -965,10 +965,6 @@ module containerApp 'br/public:avm/res/app/container-app:0.14.2' = {
             value: 'https://${aiFoundryAiServicesAccountName}.openai.azure.com/'
           }
           {
-            name: 'AZURE_OPENAI_MODEL_NAME'
-            value: aiFoundryAiServicesModelDeployment.name
-          }
-          {
             name: 'AZURE_OPENAI_DEPLOYMENT_NAME'
             value: aiFoundryAiServicesModelDeployment.name
           }
