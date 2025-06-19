@@ -28,4 +28,5 @@ dependencies = [
     "python-multipart>=0.0.20",
     "semantic-kernel>=1.28.1",
     "uvicorn>=0.34.2",
+    "requests>=2.32.3",
 ]
