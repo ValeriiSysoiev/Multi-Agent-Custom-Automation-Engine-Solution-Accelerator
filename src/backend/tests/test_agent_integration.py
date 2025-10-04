@@ -126,10 +126,19 @@ class AgentIntegrationTest(unittest.TestCase):
         
         # Check that all expected agent types are created
         expected_types = [
-            AgentType.HR, AgentType.MARKETING, AgentType.PRODUCT,
-            AgentType.PROCUREMENT, AgentType.TECH_SUPPORT,
-            AgentType.GENERIC, AgentType.HUMAN, AgentType.PLANNER,
-            AgentType.GROUP_CHAT_MANAGER
+            AgentType.GENERIC,
+            AgentType.HUMAN,
+            AgentType.PLANNER,
+            AgentType.GROUP_CHAT_MANAGER,
+            AgentType.INGESTION,
+            AgentType.DEDUPLICATION,
+            AgentType.ENRICHMENT,
+            AgentType.TRIAGE,
+            AgentType.REMEDIATION,
+            AgentType.VERIFICATION,
+            AgentType.WAIVER,
+            AgentType.REPORTING,
+            AgentType.CHAT,
         ]
         
         for agent_type in expected_types:
@@ -144,10 +153,25 @@ class AgentIntegrationTest(unittest.TestCase):
         agents = await get_agents(self.session_id, self.user_id)
         
         # Check that all expected agents are present
+        expected_agent_types = [
+            AgentType.GENERIC,
+            AgentType.HUMAN,
+            AgentType.PLANNER,
+            AgentType.GROUP_CHAT_MANAGER,
+            AgentType.INGESTION,
+            AgentType.DEDUPLICATION,
+            AgentType.ENRICHMENT,
+            AgentType.TRIAGE,
+            AgentType.REMEDIATION,
+            AgentType.VERIFICATION,
+            AgentType.WAIVER,
+            AgentType.REPORTING,
+            AgentType.CHAT,
+        ]
+
         expected_agent_names = [
-            "HrAgent", "ProductAgent", "MarketingAgent",
-            "ProcurementAgent", "TechSupportAgent", "GenericAgent",
-            "HumanAgent", "PlannerAgent", "GroupChatManager"
+            AgentFactory.get_agent_class(agent_type).__name__
+            for agent_type in expected_agent_types
         ]
         
         for agent_name in expected_agent_names:

@@ -2,9 +2,6 @@ import PanelLeft from "@/coral/components/Panels/PanelLeft";
 import PanelLeftToolbar from "@/coral/components/Panels/PanelLeftToolbar";
 import {
   Body1Strong,
-  Button,
-  Subtitle1,
-  Subtitle2,
   Toast,
   ToastBody,
   ToastTitle,
@@ -12,18 +9,17 @@ import {
   useToastController,
 } from "@fluentui/react-components";
 import {
-  Add20Regular,
   ChatAdd20Regular,
   ErrorCircle20Regular,
+  ShieldGlobe20Regular,
+  Sparkle20Filled,
 } from "@fluentui/react-icons";
 import TaskList from "./TaskList";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { PlanPanelLefProps, PlanWithSteps, Task, UserInfo } from "@/models";
 import { apiService } from "@/api";
 import { TaskService } from "@/services";
-import MsftColor from "@/coral/imports/MsftColor";
-import ContosoLogo from "../../coral/imports/ContosoLogo";
 import "../../styles/PlanPanelLeft.css";
 import PanelFooter from "@/coral/components/Panels/PanelFooter";
 import PanelUserCard from "../../coral/components/Panels/UserCard";
@@ -32,6 +28,7 @@ import { getUserInfoGlobal } from "@/api/config";
 const PlanPanelLeft: React.FC<PlanPanelLefProps> = ({ reloadTasks,restReload }) => {
   const { dispatchToast } = useToastController("toast");
   const navigate = useNavigate();
+  const location = useLocation();
   const { planId } = useParams<{ planId: string }>();
 
   const [inProgressTasks, setInProgressTasks] = useState<Task[]>([]);
@@ -100,6 +97,8 @@ const PlanPanelLeft: React.FC<PlanPanelLefProps> = ({ reloadTasks,restReload }) 
   const selectedTaskId =
     plans?.find((plan) => plan.id === planId)?.session_id ?? null;
 
+  const isChatRoute = location.pathname.startsWith("/chat");
+
   const handleTaskSelect = useCallback(
     (taskId: string) => {
       const selectedPlan = plans?.find(
@@ -117,8 +116,8 @@ const PlanPanelLeft: React.FC<PlanPanelLefProps> = ({ reloadTasks,restReload }) 
       <PanelLeft panelWidth={280} panelResize={true}>
         <PanelLeftToolbar
           linkTo="/"
-          panelTitle="Contoso"
-          panelIcon={<ContosoLogo />}
+          panelTitle="AI VM Solution"
+          panelIcon={<ShieldGlobe20Regular />}
         >
           <Tooltip content="New task" relationship={"label"} />
         </PanelLeftToolbar>
@@ -140,6 +139,24 @@ const PlanPanelLeft: React.FC<PlanPanelLefProps> = ({ reloadTasks,restReload }) 
             <ChatAdd20Regular />
           </div>
           <Body1Strong>New task</Body1Strong>
+        </div>
+
+        <div
+          className={`tab tab-chat ${isChatRoute ? "active" : ""}`}
+          onClick={() => navigate("/chat")}
+          tabIndex={0}
+          role="button"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("/chat");
+            }
+          }}
+        >
+          <div className="tab tab-new-task-icon">
+            <Sparkle20Filled />
+          </div>
+          <Body1Strong>Risk Chat</Body1Strong>
         </div>
 
         <br />

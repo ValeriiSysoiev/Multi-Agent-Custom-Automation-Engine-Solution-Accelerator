@@ -2,18 +2,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Button,
-    Spinner,
     Toast,
     ToastTitle,
     ToastBody,
     useToastController,
     Toaster
 } from '@fluentui/react-components';
-import {
-    Add20Regular,
-    ErrorCircle20Regular,
-    Sparkle20Filled
-} from '@fluentui/react-icons';
+import { Sparkle20Filled } from '@fluentui/react-icons';
 import '../styles/PlanPage.css';
 import CoralShellColumn from '../coral/components/Layout/CoralShellColumn';
 import CoralShellRow from '../coral/components/Layout/CoralShellRow';
@@ -28,6 +23,7 @@ import ContentToolbar from '@/coral/components/Content/ContentToolbar';
  * Accessible via the route "/"
  */
 const HomePage: React.FC = () => {
+    const navigate = useNavigate();
     /**
     * Handle new task creation from the "New task" button
     * Resets textarea to empty state on HomePage
@@ -53,12 +49,21 @@ const HomePage: React.FC = () => {
                     />
                     <Content>
                         <ContentToolbar
-                            panelTitle={"Multi-Agent Planner"}
+                            panelTitle={"AI VM Planner"}
                         ></ContentToolbar>
                         <HomeInput
                             onInputSubmit={handleNewTask}
                             onQuickTaskSelect={handleNewTask}
                         />
+                        <div style={{ marginTop: '16px' }}>
+                            <Button
+                                appearance="secondary"
+                                icon={<Sparkle20Filled />}
+                                onClick={() => navigate('/chat')}
+                            >
+                                Open Risk Chat
+                            </Button>
+                        </div>
                     </Content>
 
                 </CoralShellRow>

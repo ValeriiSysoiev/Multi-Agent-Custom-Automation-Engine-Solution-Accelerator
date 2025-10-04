@@ -1,4 +1,5 @@
 import datetime
+from datetime import timezone
 import logging
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -9,11 +10,15 @@ from context.cosmos_memory_kernel import CosmosMemoryContext
 from event_utils import track_event_if_configured
 from kernel_agents.agent_base import BaseAgent
 from kernel_tools.generic_tools import GenericTools
-from kernel_tools.hr_tools import HrTools
-from kernel_tools.marketing_tools import MarketingTools
-from kernel_tools.procurement_tools import ProcurementTools
-from kernel_tools.product_tools import ProductTools
-from kernel_tools.tech_support_tools import TechSupportTools
+from kernel_tools.chat_tools import ChatTools
+from kernel_tools.ingestion_tools import IngestionTools
+from kernel_tools.dedup_tools import DeduplicationTools
+from kernel_tools.enrichment_tools import EnrichmentTools
+from kernel_tools.waiver_tools import WaiverTools
+from kernel_tools.reporting_tools import ReportingTools
+from kernel_tools.triage_tools import TriageTools
+from kernel_tools.remediation_tools import RemediationTools
+from kernel_tools.verification_tools import VerificationTools
 from models.messages_kernel import (
     AgentMessage,
     AgentType,
@@ -84,20 +89,28 @@ class PlannerAgent(BaseAgent):
         # Store additional planner-specific attributes
         self._available_agents = available_agents or [
             AgentType.HUMAN.value,
-            AgentType.HR.value,
-            AgentType.MARKETING.value,
-            AgentType.PRODUCT.value,
-            AgentType.PROCUREMENT.value,
-            AgentType.TECH_SUPPORT.value,
             AgentType.GENERIC.value,
+            AgentType.INGESTION.value,
+            AgentType.DEDUPLICATION.value,
+            AgentType.ENRICHMENT.value,
+            AgentType.TRIAGE.value,
+            AgentType.REMEDIATION.value,
+            AgentType.VERIFICATION.value,
+            AgentType.WAIVER.value,
+            AgentType.REPORTING.value,
+            AgentType.CHAT.value,
         ]
         self._agent_tools_list = {
-            AgentType.HR: HrTools.generate_tools_json_doc(),
-            AgentType.MARKETING: MarketingTools.generate_tools_json_doc(),
-            AgentType.PRODUCT: ProductTools.generate_tools_json_doc(),
-            AgentType.PROCUREMENT: ProcurementTools.generate_tools_json_doc(),
-            AgentType.TECH_SUPPORT: TechSupportTools.generate_tools_json_doc(),
             AgentType.GENERIC: GenericTools.generate_tools_json_doc(),
+            AgentType.INGESTION: IngestionTools.generate_tools_json_doc(),
+            AgentType.DEDUPLICATION: DeduplicationTools.generate_tools_json_doc(),
+            AgentType.ENRICHMENT: EnrichmentTools.generate_tools_json_doc(),
+            AgentType.TRIAGE: TriageTools.generate_tools_json_doc(),
+            AgentType.REMEDIATION: RemediationTools.generate_tools_json_doc(),
+            AgentType.VERIFICATION: VerificationTools.generate_tools_json_doc(),
+            AgentType.WAIVER: WaiverTools.generate_tools_json_doc(),
+            AgentType.REPORTING: ReportingTools.generate_tools_json_doc(),
+            AgentType.CHAT: ChatTools.generate_tools_json_doc(),
         }
 
         self._agent_instances = agent_instances or {}
@@ -394,6 +407,10 @@ class PlannerAgent(BaseAgent):
 
             # Create steps from the parsed data
             steps = []
+            user_scope = None
+            if getattr(input_task, "metadata", None):
+                user_scope = input_task.metadata.get("user_scope")
+
             for step_data in steps_data:
                 action = step_data.action
                 agent_name = step_data.agent
@@ -415,6 +432,7 @@ class PlannerAgent(BaseAgent):
                     agent=agent_name,
                     status=StepStatus.planned,
                     human_approval_status=HumanFeedbackStatus.requested,
+                    metadata=user_scope,
                 )
 
                 # Store the step
@@ -460,7 +478,7 @@ class PlannerAgent(BaseAgent):
                 overall_status=PlanStatus.in_progress,
                 summary=f"Plan created for: {input_task.description}",
                 human_clarification_request=None,
-                timestamp=datetime.datetime.utcnow().isoformat(),
+                timestamp=datetime.datetime.now(timezone.utc).isoformat(),
             )
 
             # Store the dummy plan
@@ -476,7 +494,8 @@ class PlannerAgent(BaseAgent):
                 agent=AgentType.GENERIC.value,  # Using the correct value from AgentType enum
                 status=StepStatus.planned,
                 human_approval_status=HumanFeedbackStatus.requested,
-                timestamp=datetime.datetime.utcnow().isoformat(),
+                timestamp=datetime.datetime.now(timezone.utc).isoformat(),
+                metadata=(getattr(input_task, "metadata", {}) or {}).get("user_scope"),
             )
 
             # Store the dummy step
@@ -492,7 +511,8 @@ class PlannerAgent(BaseAgent):
                 agent=AgentType.HUMAN.value,
                 status=StepStatus.planned,
                 human_approval_status=HumanFeedbackStatus.requested,
-                timestamp=datetime.datetime.utcnow().isoformat(),
+                timestamp=datetime.datetime.now(timezone.utc).isoformat(),
+                metadata=(getattr(input_task, "metadata", {}) or {}).get("user_scope"),
             )
 
             # Store the clarification step
@@ -551,55 +571,37 @@ class PlannerAgent(BaseAgent):
         # Build the instruction with proper format placeholders for .format() method
 
         instruction_template = """
-            You are the Planner, an AI orchestrator that manages a group of AI agents to accomplish tasks.
-
-            For the given objective, come up with a simple step-by-step plan.
-            This plan should involve individual tasks that, if executed correctly, will yield the correct answer. Do not add any superfluous steps.
-            The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.
-
-            These actions are passed to the specific agent. Make sure the action contains all the information required for the agent to execute the task.
+            You are the Planner for the AI Vulnerability Management platform. Coordinate the specialised agents so vulnerabilities move from ingestion through remediation, verification, waivers, and reporting.
 
             Your objective is:
             {{$objective}}
 
-            The agents you have access to are:
+            Available agents:
             {{$agents_str}}
 
-            These agents have access to the following functions:
+            Agent responsibilities:
+            - Ingestion_Agent gathers scanner results (Defender for Cloud, Qualys) and normalises them.
+            - Deduplication_Agent reconciles duplicate findings across scanners and time windows.
+            - Enrichment_Agent attaches asset ownership, business context, and threat intelligence.
+            - Triage_Agent produces risk scores and recommended treatments.
+            - Remediation_Agent creates actionable tickets grouped by remediation unit.
+            - Verification_Agent validates evidence, reruns scans, and reopens gaps when necessary.
+            - Waiver_Agent manages exception requests, expiries, and escalations.
+            - Reporting_Agent publishes dataset exports and refreshes dashboards.
+            - Chat_Agent summarises status for stakeholders. Use Generic_Agent for minor reasoning and Human_Agent when manual action is unavoidable.
+
+            Functions available to each agent:
             {{$tools_str}}
 
-            The first step of your plan should be to ask the user for any additional information required to progress the rest of steps planned.
+            Planning rules:
+            1. First step: confirm missing prerequisites from the requestor so downstream agents have required data.
+            2. Prefer the pipeline order (ingest → deduplicate → enrich → triage → remediation → verification → waiver/reporting) unless the task clearly targets a subset.
+            3. Each action must specify the agent and function to call (e.g., "Run ingestion cycle. Function: run_ingestion_cycle").
+            4. If information is missing, populate human_clarification_request with a concise question.
+            5. Use Generic_Agent only when a general LLM can complete the task; otherwise route to Human_Agent.
+            6. Keep plans to six steps or fewer and avoid redundant work.
+            7. Summaries must be fewer than 50 words.
 
-            Only use the functions provided as part of your plan. If the task is not possible with the agents and tools provided, create a step with the agent of type Human and mark the overall status as completed.
-
-            Do not add superfluous steps - only take the most direct path to the solution, with the minimum number of steps. Only do the minimum necessary to complete the goal.
-
-            If there is a single function call that can directly solve the task, only generate a plan with a single step. For example, if someone asks to be granted access to a database, generate a plan with only one step involving the grant_database_access function, with no additional steps.
-
-            When generating the action in the plan, frame the action as an instruction you are passing to the agent to execute. It should be a short, single sentence. Include the function to use. For example, "Set up an Office 365 Account for Jessica Smith. Function: set_up_office_365_account"
-
-            Ensure the summary of the plan and the overall steps is less than 50 words.
-
-            Identify any additional information that might be required to complete the task. Include this information in the plan in the human_clarification_request field of the plan. If it is not required, leave it as null.
-
-            When identifying required information, consider what input a GenericAgent or fallback LLM model would need to perform the task correctly. This may include:
-            - Input data, text, or content to process
-            - A question to answer or topic to describe
-            - Any referenced material that is mentioned but not actually included (e.g., "the given text")
-            - A clear subject or target when the task instruction is too vague (e.g., "describe," "summarize," or "analyze" without specifying what to describe)
-
-            If such required input is missing—even if not explicitly referenced—generate a concise clarification request in the human_clarification_request field.
-
-            Do not include information that you are waiting for clarification on in the string of the action field, as this otherwise won't get updated.
-
-            You must prioritise using the provided functions to accomplish each step. First evaluate each and every function the agents have access too. Only if you cannot find a function needed to complete the task, and you have reviewed each and every function, and determined why each are not suitable, there are two options you can take when generating the plan.
-            First evaluate whether the step could be handled by a typical large language model, without any specialised functions. For example, tasks such as "add 32 to 54", or "convert this SQL code to a python script", or "write a 200 word story about a fictional product strategy".
-            If a general Large Language Model CAN handle the step/required action, add a step to the plan with the action you believe would be needed. Assign these steps to the GenericAgent. For example, if the task is to convert the following SQL into python code (SELECT * FROM employees;), and there is no function to convert SQL to python, write a step with the action "convert the following SQL into python code (SELECT * FROM employees;)" and assign it to the GenericAgent.
-            Alternatively, if a general Large Language Model CAN NOT handle the step/required action, add a step to the plan with the action you believe would be needed and assign it to the HumanAgent. For example, if the task is to find the best way to get from A to B, and there is no function to calculate the best route, write a step with the action "Calculate the best route from A to B." and assign it to the HumanAgent.
-
-            Limit the plan to 6 steps or less.
-
-            Choose from {{$agents_str}} ONLY for planning your steps.
-
+            Return the plan using the provided JSON schema.
             """
         return instruction_template

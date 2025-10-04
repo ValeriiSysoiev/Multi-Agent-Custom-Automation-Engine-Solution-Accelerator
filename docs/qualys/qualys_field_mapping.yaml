@@ -1,0 +1,495 @@
+# Qualys VMDR - Field Mapping Specification
+# Machine-readable mapping for Codex implementation
+
+api_info:
+  service: "Qualys VMDR"
+  provider: "Qualys"
+  api_version: "2.0"
+  base_urls:
+    us_platform_1: "https://qualysapi.qualys.com"
+    us_platform_2: "https://qualysapi.qualys.eu"
+    us_platform_3: "https://qualysapi.qg3.apps.qualys.com"
+    eu_platform_1: "https://qualysapi.qualys.eu"
+    eu_platform_2: "https://qualysapi.qg2.apps.qualys.eu"
+
+endpoints:
+  host_vm_detections:
+    path: "/api/2.0/fo/asset/host/vm/detection/"
+    method: "GET"
+    parameters:
+      - name: "action"
+        required: true
+        value: "list"
+      - name: "vm_scan_since"
+        required: false
+        type: "date"
+        format: "YYYY-MM-DD"
+        description: "Start date for scan range"
+      - name: "truncation_limit"
+        required: false
+        type: "integer"
+        max: 10000
+        default: 1000
+      - name: "show_results"
+        required: false
+        type: "boolean"
+        default: 1
+      - name: "status"
+        required: false
+        type: "string"
+        enum: ["New", "Active", "Fixed", "Re-Opened"]
+
+  knowledge_base:
+    path: "/api/2.0/fo/knowledge_base/vuln/"
+    method: "GET"
+    parameters:
+      - name: "action"
+        required: true
+        value: "list"
+      - name: "details"
+        required: false
+        type: "string"
+        enum: ["Basic", "All", "None"]
+        default: "Basic"
+      - name: "ids"
+        required: false
+        type: "string"
+        description: "Comma-separated QIDs"
+
+authentication:
+  type: "basic"
+  headers:
+    Authorization: "Basic base64(username:password)"
+    X-Requested-With: "Curl"
+
+response_format:
+  primary: "xml"
+  secondary: "json"
+  json_fallback_strategy:
+    - try: "application/json"
+    - on_error: ["406", "415", "invalid_json"]
+    - fallback_to: "application/xml"
+
+field_mappings:
+  # Core identification
+  scanner_source:
+    value: "qualys"
+    type: "string"
+    constant: true
+    description: "Always 'qualys' for Qualys findings"
+
+  qid:
+    source: "QID"
+    type: "string"
+    required: true
+    description: "Qualys vulnerability ID"
+
+  vuln_key:
+    primary_source: "CVE_LIST.CVE[0].ID"
+    fallback_sources:
+      - "VENDOR_REFERENCE_LIST.VENDOR_REFERENCE[0].ID"
+      - "concat('QID-', QID)"
+    type: "string"
+    required: true
+    description: "Primary vulnerability identifier"
+
+  # Asset identification
+  asset_identifiers:
+    type: "object"
+    fields:
+      ip:
+        source: "IP"
+        type: "string"
+        nullable: false
+        description: "IP address"
+
+      hostname:
+        primary_source: "DNS"
+        fallback_sources:
+          - "DNS_DATA.HOSTNAME"
+          - "HOSTNAME"
+          - "DNS_DATA.FQDN"
+        type: "string"
+        nullable: true
+        description: "Host DNS name"
+
+      agentId:
+        source: "AGENT_ID"
+        type: "string"
+        nullable: true
+        description: "Qualys Cloud Agent ID"
+
+      hostId:
+        source: "ID"
+        type: "string"
+        nullable: true
+        description: "Qualys Host ID"
+
+      qgHostId:
+        source: "QG_HOSTID"
+        type: "string"
+        nullable: true
+        description: "Qualys Guard Host ID"
+
+  # CVE and vulnerability data
+  cve:
+    source: "CVE_LIST.CVE[*].ID"
+    type: "array[string]"
+    default: []
+    extraction: "iterate_all_cve_elements"
+    description: "List of CVE identifiers"
+
+  severity:
+    source: "SEVERITY"
+    type: "string"
+    mapping:
+      "5": "critical"
+      "4": "high"
+      "3": "medium"
+      "2": "low"
+      "1": "info"
+    default: "medium"
+    description: "Normalized severity level"
+
+  cvss:
+    type: "object"
+    fields:
+      baseScore:
+        primary_source: "CVSS_V3.BASE"
+        fallback_sources:
+          - "CVSS.BASE"
+          - "CVSS_BASE"
+          - "CVSS_SCORE"
+        type: "number"
+        range: [0.0, 10.0]
+        description: "CVSS base score"
+
+      vector:
+        primary_source: "CVSS_V3.VECTOR"
+        fallback_sources:
+          - "CVSS_VECTOR"
+        type: "string"
+        pattern: "^CVSS:"
+        description: "CVSS vector string"
+
+      temporal:
+        source: "CVSS_V3.TEMPORAL"
+        type: "number"
+        optional: true
+        description: "CVSS temporal score"
+
+  # Temporal fields
+  first_seen:
+    source: "FIRST_FOUND_DATETIME"
+    type: "datetime"
+    format: "ISO8601"
+    description: "First detection timestamp"
+
+  last_seen:
+    source: "LAST_FOUND_DATETIME"
+    type: "datetime"
+    format: "ISO8601"
+    description: "Last detection timestamp"
+
+  last_fixed:
+    source: "LAST_FIXED_DATETIME"
+    type: "datetime"
+    format: "ISO8601"
+    optional: true
+    description: "Last fixed timestamp"
+
+  # Status mapping
+  status:
+    source: "STATUS"
+    type: "string"
+    mapping:
+      "New": "open"
+      "Active": "open"
+      "Fixed": "fixed"
+      "Re-Opened": "reopened"
+    case_insensitive: true
+    default: "open"
+    description: "Vulnerability status"
+
+  # Location and context
+  location:
+    type: "object"
+    fields:
+      port:
+        source: "PORT"
+        type: "integer"
+        range: [1, 65535]
+        optional: true
+        description: "Network port"
+
+      protocol:
+        source: "PROTOCOL"
+        type: "string"
+        transform: "lowercase"
+        enum: ["tcp", "udp", "icmp"]
+        optional: true
+        description: "Network protocol"
+
+      service:
+        source: "SERVICE"
+        type: "string"
+        optional: true
+        description: "Service name"
+
+      fqdn:
+        source: "FQDN"
+        type: "string"
+        optional: true
+        description: "Fully qualified domain name"
+
+      ssl:
+        source: "SSL"
+        type: "boolean"
+        transform: "int_to_bool"
+        optional: true
+        description: "SSL/TLS enabled"
+
+      instance:
+        source: "INSTANCE"
+        type: "string"
+        optional: true
+        description: "Instance identifier"
+
+      softwareName:
+        source: "SOFTWARE_LIST.SOFTWARE[0].PRODUCT"
+        type: "string"
+        optional: true
+        description: "Affected software"
+
+      vendor:
+        source: "SOFTWARE_LIST.SOFTWARE[0].VENDOR"
+        type: "string"
+        optional: true
+        description: "Software vendor"
+
+  # Detection metadata
+  detection_type:
+    source: "TYPE"
+    type: "string"
+    enum: ["Confirmed", "Potential"]
+    description: "Detection confidence"
+
+  times_found:
+    source: "TIMES_FOUND"
+    type: "integer"
+    description: "Number of detections"
+
+  # Remediation information
+  patch_available:
+    source: "PATCHABLE"
+    type: "boolean"
+    transform: "int_to_bool"
+    default: false
+    description: "Patch availability"
+
+  solution:
+    source: "SOLUTION"
+    type: "string"
+    strip_cdata: true
+    nullable: true
+    description: "Remediation instructions"
+
+  evidence:
+    source: "RESULTS"
+    type: "string"
+    strip_cdata: true
+    nullable: true
+    description: "Detection evidence"
+
+  # Additional metadata
+  additional_info:
+    type: "object"
+    fields:
+      uniqueVulnId:
+        source: "UNIQUE_VULN_ID"
+        type: "string"
+        description: "Unique vulnerability instance ID"
+
+      diagnosis:
+        source: "DIAGNOSIS"
+        type: "string"
+        strip_cdata: true
+        optional: true
+        description: "Vulnerability diagnosis"
+
+      consequence:
+        source: "CONSEQUENCE"
+        type: "string"
+        strip_cdata: true
+        optional: true
+        description: "Impact description"
+
+      title:
+        source: "TITLE"
+        type: "string"
+        optional: true
+        description: "Vulnerability title"
+
+      category:
+        source: "CATEGORY"
+        type: "string"
+        optional: true
+        description: "Vulnerability category"
+
+      bugtraq:
+        source: "BUGTRAQ_LIST.BUGTRAQ[*].ID"
+        type: "array[string]"
+        optional: true
+        description: "Bugtraq IDs"
+
+      vendorReferences:
+        source: "VENDOR_REFERENCE_LIST.VENDOR_REFERENCE[*].ID"
+        type: "array[string]"
+        optional: true
+        description: "Vendor reference IDs"
+
+      ignored:
+        source: "IS_IGNORED"
+        type: "boolean"
+        transform: "int_to_bool"
+        optional: true
+        description: "Ignored by user"
+
+      disabled:
+        source: "IS_DISABLED"
+        type: "boolean"
+        transform: "int_to_bool"
+        optional: true
+        description: "Detection disabled"
+
+      affectRunningKernel:
+        source: "AFFECT_RUNNING_KERNEL"
+        type: "boolean"
+        transform: "int_to_bool"
+        optional: true
+        description: "Affects running kernel"
+
+      affectRunningService:
+        source: "AFFECT_RUNNING_SERVICE"
+        type: "boolean"
+        transform: "int_to_bool"
+        optional: true
+        description: "Affects running service"
+
+      affectExploitableConfig:
+        source: "AFFECT_EXPLOITABLE_CONFIG"
+        type: "boolean"
+        transform: "int_to_bool"
+        optional: true
+        description: "Exploitable configuration"
+
+      os:
+        source: "OS"
+        type: "string"
+        strip_cdata: true
+        optional: true
+        description: "Operating system"
+
+      osCpe:
+        source: "OS_CPE"
+        type: "string"
+        strip_cdata: true
+        optional: true
+        description: "OS CPE identifier"
+
+  # Raw data preservation
+  raw:
+    source: "entire_record"
+    type: "object"
+    description: "Complete original Qualys response"
+
+# Processing rules
+transformations:
+  int_to_bool:
+    description: "Convert 0/1 to boolean"
+    rules:
+      "0": false
+      "1": true
+    default: false
+
+  strip_cdata:
+    description: "Remove CDATA wrapper"
+    pattern: "<![CDATA[(.*)]]>"
+    replacement: "$1"
+
+  extract_cve_list:
+    description: "Extract all CVE IDs from nested structure"
+    xpath: "//CVE_LIST/CVE/ID"
+    return_type: "array"
+
+  normalize_protocol:
+    input_transform: "lowercase"
+    mapping:
+      "tcp": "tcp"
+      "udp": "udp"
+      "icmp": "icmp"
+      "ip": "ip"
+    default: "tcp"
+
+# Special handling
+special_cases:
+  empty_cve:
+    description: "Detection without CVE"
+    handling: "Use QID-{qid} as vuln_key"
+
+  multiple_hosts:
+    description: "Multiple hosts in single response"
+    handling: "Iterate HOST elements, map each separately"
+
+  cdata_fields:
+    description: "Fields wrapped in CDATA"
+    fields: ["RESULTS", "SOLUTION", "DIAGNOSIS", "CONSEQUENCE", "OS", "OS_CPE", "DNS"]
+    handling: "Strip CDATA tags during parsing"
+
+  missing_severity:
+    description: "No severity value"
+    handling: "Default to 3 (medium)"
+
+  date_formats:
+    description: "Various date formats"
+    handling: "Parse ISO8601, fallback to YYYY-MM-DD"
+
+# Error handling
+error_handling:
+  authentication_failed:
+    error_code: "1000"
+    retry: false
+    action: "Check credentials"
+
+  rate_limit:
+    http_code: 429
+    retry: true
+    wait_seconds: 60
+    backoff_multiplier: 2
+
+  timeout:
+    retry: true
+    max_retries: 3
+    timeout_seconds: 120
+
+  invalid_xml:
+    action: "Log error, skip record"
+    severity: "warning"
+
+# Performance optimization
+performance:
+  batch_size: 1000
+  concurrent_requests: 5
+  cache_duration_seconds:
+    knowledge_base: 86400  # 24 hours
+    host_list: 3600  # 1 hour
+    detections: 900  # 15 minutes
+
+  pagination:
+    max_truncation_limit: 10000
+    recommended_limit: 1000
+
+  incremental_updates:
+    use_date_ranges: true
+    date_field: "vm_scan_since"
+    overlap_days: 1

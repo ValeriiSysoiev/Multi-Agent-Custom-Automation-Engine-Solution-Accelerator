@@ -25,6 +25,16 @@
   margin: 0px 8px;
 }
 
+.tab.tab-chat {
+  margin: 0px 8px;
+}
+
+.tab.active {
+  background-color: var(--colorNeutralBackground1Pressed);
+  color: var(--colorNeutralForeground1);
+  font-weight: 500;
+}
+
 .tab.tab-new-task-icon {
   display: flex;
   width: 40px;

@@ -1,0 +1,43 @@
+properties:
+  configuration:
+    triggerType: Schedule
+    scheduleTriggerConfig:
+      cronExpression: "0 2 * * *"
+      parallelism: 1
+      replicaCompletionCount: 1
+    replicaTimeout: 3600
+    replicaRetryLimit: 1
+    registries:
+    - server: acraivmprod.azurecr.io
+      identity: /subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourcegroups/RG-AIVM/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-aivmprodcliu3
+  template:
+    containers:
+    - name: aivm-reporting-job
+      image: acraivmprod.azurecr.io/macaebackend:latest
+      command:
+      - /bin/sh
+      args:
+      - -c
+      - python -m scripts.run_reporting_export --refresh-powerbi --json
+      resources:
+        cpu: 0.5
+        memory: 1Gi
+      env:
+      - name: KEYVAULT_URI
+        value: https://kv-aivm-core.vault.azure.net/
+      - name: COSMOSDB_ENDPOINT
+        value: https://cosmos-aivmprodcliu3.documents.azure.com:443/
+      - name: COSMOSDB_DATABASE
+        value: macae
+      - name: AZURE_OPENAI_ENDPOINT
+        value: https://aif-aivmprodcliu3.openai.azure.com/
+      - name: AZURE_CLIENT_ID
+        value: c6c2af5b-d1c9-4b02-9b8e-5894e89cb9cd
+      - name: PBI_WORKSPACE_ID
+        value: 8f802077-e058-4aac-ae18-0335bbbf59ab
+      - name: PBI_DATASET_ID
+        value: acc0156b-8e36-474b-8324-5d1f32359fc9
+  identity:
+    type: UserAssigned
+    userAssignedIdentities:
+      /subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourcegroups/RG-AIVM/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-aivmprodcliu3: {}

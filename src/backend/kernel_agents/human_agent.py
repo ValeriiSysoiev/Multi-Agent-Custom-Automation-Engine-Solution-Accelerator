@@ -175,7 +175,8 @@ class HumanAgent(BaseAgent):
                 user_id=self._user_id,
                 plan_id=step.plan_id,
                 step_id=human_feedback.step_id,
-                agent_id=AgentType.GROUP_CHAT_MANAGER.value,
+                action=step.action,
+                agent=AgentType.GROUP_CHAT_MANAGER,
             )
         )
 

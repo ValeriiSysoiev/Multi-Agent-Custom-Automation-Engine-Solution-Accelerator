@@ -1,0 +1,83 @@
+# SLA matrix derived from company methodology for remediation buckets.
+# Times are expressed in hours relative to ticket creation.
+
+metadata:
+  version: 1
+  timezone: "America/Toronto"
+
+sla:
+  patch:
+    critical:
+      prod:   {ack_hours: 2,   due_hours: 48,   verify_hours: 24, emergency_ok: true}
+      uat:    {ack_hours: 4,   due_hours: 72,   verify_hours: 24}
+      dev:    {ack_hours: 8,   due_hours: 120,  verify_hours: 48}
+      default: {ack_hours: 8,   due_hours: 120,  verify_hours: 48}
+    high:
+      prod:   {ack_hours: 24,  due_hours: 120,  verify_hours: 48}
+      uat:    {ack_hours: 24,  due_hours: 168,  verify_hours: 72}
+      dev:    {ack_hours: 48,  due_hours: 288,  verify_hours: 72}
+      default: {ack_hours: 48,  due_hours: 288,  verify_hours: 72}
+    medium:
+      prod:   {ack_hours: 72,  due_hours: 480,  verify_hours: 120}
+      uat:    {ack_hours: 120, due_hours: 720,  verify_hours: 120}
+      dev:    {ack_hours: 120, due_hours: 1080, verify_hours: 120}
+      default: {ack_hours: 120, due_hours: 1080, verify_hours: 120}
+    low:
+      default: {ack_hours: 240, due_hours: 2160, verify_hours: 240}
+  config:
+    critical:
+      prod:   {ack_hours: 2,   due_hours: 24,   verify_hours: 24, emergency_ok: true}
+      uat:    {ack_hours: 4,   due_hours: 48,   verify_hours: 24}
+      dev:    {ack_hours: 8,   due_hours: 72,   verify_hours: 48}
+      default: {ack_hours: 8,   due_hours: 72,   verify_hours: 48}
+    high:
+      prod:   {ack_hours: 24,  due_hours: 120,  verify_hours: 48}
+      uat:    {ack_hours: 24,  due_hours: 168,  verify_hours: 72}
+      dev:    {ack_hours: 48,  due_hours: 240,  verify_hours: 72}
+      default: {ack_hours: 48,  due_hours: 240,  verify_hours: 72}
+    medium:
+      prod:   {ack_hours: 72,  due_hours: 360,  verify_hours: 120}
+      uat:    {ack_hours: 120, due_hours: 600,  verify_hours: 120}
+      dev:    {ack_hours: 120, due_hours: 840,  verify_hours: 120}
+      default: {ack_hours: 120, due_hours: 840,  verify_hours: 120}
+    low:
+      default: {ack_hours: 240, due_hours: 1440, verify_hours: 240}
+  code:
+    critical:
+      prod:   {ack_hours: 4,   due_hours: 240,  verify_hours: 72}
+      uat:    {ack_hours: 8,   due_hours: 288,  verify_hours: 72}
+      dev:    {ack_hours: 24,  due_hours: 288,  verify_hours: 72}
+      default: {ack_hours: 24,  due_hours: 288,  verify_hours: 72}
+    high:
+      prod:   {ack_hours: 48,  due_hours: 480,  verify_hours: 120}
+      uat:    {ack_hours: 48,  due_hours: 600,  verify_hours: 120}
+      dev:    {ack_hours: 72,  due_hours: 720,  verify_hours: 120}
+      default: {ack_hours: 72,  due_hours: 720,  verify_hours: 120}
+    medium:
+      prod:   {ack_hours: 120, due_hours: 1080, verify_hours: 168}
+      uat:    {ack_hours: 168, due_hours: 1440, verify_hours: 168}
+      dev:    {ack_hours: 168, due_hours: 1800, verify_hours: 168}
+      default: {ack_hours: 168, due_hours: 1800, verify_hours: 168}
+    low:
+      default: {ack_hours: 240, due_hours: 2880, verify_hours: 240}
+  control:
+    critical:
+      prod:   {ack_hours: 1,   due_hours: 24,   verify_hours: 24}
+      uat:    {ack_hours: 2,   due_hours: 24,   verify_hours: 24}
+      dev:    {ack_hours: 4,   due_hours: 48,   verify_hours: 48}
+      default: {ack_hours: 4,   due_hours: 48,   verify_hours: 48}
+    high:
+      default: {ack_hours: 24,  due_hours: 72,   verify_hours: 48}
+    medium:
+      default: {ack_hours: 72,  due_hours: 240,  verify_hours: 120}
+    low:
+      default: {ack_hours: 120, due_hours: 480,  verify_hours: 120}
+
+escalation:
+  warning_pct: 0.5
+  breach_notification: true
+
+change_windows:
+  emergency_requires_approval: true
+  prod_normal_cadence: "weekly"
+  uat_lead_time_hours: 24

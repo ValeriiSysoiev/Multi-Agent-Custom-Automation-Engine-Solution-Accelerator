@@ -1,0 +1,46 @@
+# Verification policy derived from verification doc.
+# Defines acceptable evidence combinations per risk tier and remediation bucket.
+
+policy:
+  critical:
+    patch:
+      required:
+        - [targeted_rescan, config_proof]
+        - [config_proof, functional_probe]
+    config:
+      required:
+        - [config_proof, functional_probe]
+    code:
+      required:
+        - [change_record, sbom_diff, functional_probe]
+    control:
+      required:
+        - [control_telemetry, config_proof]
+  high:
+    patch:
+      required:
+        - [targeted_rescan, config_proof]
+        - [config_proof]
+    config:
+      required:
+        - [config_proof]
+    code:
+      required:
+        - [change_record, sbom_diff]
+    control:
+      required:
+        - [control_telemetry]
+  medium:
+    default:
+      required:
+        - [config_proof]
+  low:
+    default:
+      required:
+        - [config_proof]
+
+windows_hours:
+  critical: 48
+  high: 120
+  medium: 168
+  low: 240

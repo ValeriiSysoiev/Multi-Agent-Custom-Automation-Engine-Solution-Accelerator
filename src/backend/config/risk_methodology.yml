@@ -1,0 +1,143 @@
+# Risk methodology configuration derived from IS Risk Management Methodology
+# Encodes likelihood/impact rubrics, modifier rules, unacceptable condition floors,
+# and score-to-tier mappings used by the triage service.
+
+likelihood:
+  scale:
+    1:
+      label: "Rare"
+      description: "Attack requires improbable conditions or privileged chain; no credible threats observed."
+    2:
+      label: "Unlikely"
+      description: "Limited exposure or strong layered controls; exploitation would demand specialist capabilities."
+    3:
+      label: "Possible"
+      description: "Exposure exists and attack is feasible with moderate effort; limited threat activity."
+    4:
+      label: "Likely"
+      description: "Well-known weakness with tooling or proofs-of-concept available; exposure is material."
+    5:
+      label: "Almost Certain"
+      description: "Active exploitation in the wild or trivial attack path with minimal controls."
+  base_severity_map:
+    critical: 5
+    high: 4
+    medium: 3
+    low: 2
+    info: 1
+  exposure_modifiers:
+    internet_facing: 1
+    no_authentication: 1
+    sensitive_network_segment: 1
+    internal_only: -1
+  control_modifiers:
+    waf: -1
+    firewall: -1
+    edr: -1
+    xdr: -1
+    mfa: -1
+    siem: -1
+    ids: -1
+    ips: -1
+    backup: 0
+    disaster_recovery: 0
+  threat_signal_weights:
+    known_exploited: 2
+    exploit_probability_high: 1
+    exploit_probability_medium: 0
+    defender_alert: 1
+    active_malware: 2
+  epss_thresholds:
+    high: 0.90
+    medium: 0.50
+
+impact:
+  scale:
+    1:
+      label: "Negligible"
+      description: "No meaningful service interruption or data impact."
+    2:
+      label: "Minor"
+      description: "Localised disruption with low value data exposure."
+    3:
+      label: "Moderate"
+      description: "Service degradation or loss of non-sensitive data affecting a business unit."
+    4:
+      label: "Major"
+      description: "Service outage or compromise of sensitive data triggering regulatory concern."
+    5:
+      label: "Severe"
+      description: "Extended outage of critical services or large-scale regulated data breach."
+  criticality_map:
+    tier0: 5
+    tier1: 4
+    tier2: 3
+    tier3: 2
+    tier4: 2
+    unknown: 3
+  environment_adjustment:
+    prod: 1
+    production: 1
+    shared: 0
+    uat: 0
+    stage: 0
+    staging: 0
+    dev: -1
+    development: -1
+    test: -1
+  data_classification_weights:
+    regulated: 5
+    pii: 5
+    confidential: 4
+    internal: 3
+    public: 2
+  crown_jewel_tags:
+    - payments
+    - identity
+    - authentication
+    - trading
+    - safety
+
+unacceptable_conditions:
+  - id: "outage_gt_24h"
+    description: "Credible scenario where operations could be interrupted for more than 24 hours."
+    risk_floor: "critical"
+  - id: "large_data_breach"
+    description: "Potential exposure of sensitive data affecting more than 100 individuals or regulated records."
+    risk_floor: "critical"
+  - id: "regulatory_non_compliance"
+    description: "Material non-compliance with regulatory or contractual obligations if exploited."
+    risk_floor: "high"
+  - id: "trust_impact"
+    description: "Scenario that would materially erode stakeholder trust or brand reputation."
+    risk_floor: "high"
+  - id: "active_exploitation_crown_jewel"
+    description: "Active exploitation (KEV/Defender TI) against an internet-facing crown jewel service."
+    risk_floor: "critical"
+
+risk_score_thresholds:
+  - min_score: 20
+    tier: "critical"
+  - min_score: 12
+    tier: "high"
+  - min_score: 5
+    tier: "medium"
+  - min_score: 3
+    tier: "low"
+  - min_score: 1
+    tier: "very_low"
+
+treatment_defaults:
+  critical: "mitigate"
+  high: "mitigate"
+  medium: "mitigate"
+  low: "mitigate"
+  very_low: "accept"
+
+residual_risk:
+  default_tolerance: "Risk is acceptable only when residual likelihood and impact are both <=2 with documented controls."
+
+triage_prompt:
+  model: "gpt-4o"
+  temperature: 0.0
+  json_schema_ref: "TriageLLMResponse"

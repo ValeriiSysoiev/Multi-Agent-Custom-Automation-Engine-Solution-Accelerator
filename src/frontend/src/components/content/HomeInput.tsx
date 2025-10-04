@@ -102,13 +102,13 @@ const HomeInput: React.FC<HomeInputProps> = ({
             <div className="home-input-content">
                 <div className="home-input-center-content">
                     <div className="home-input-title-wrapper">
-                        <Title2>How can I help?</Title2>
+                        <Title2>What should the AI VM team tackle next?</Title2>
                     </div>
 
                     <ChatInput
                         ref={textareaRef} // forwarding
                         value={input}
-                        placeholder="Tell us what needs planning, building, or connecting—we'll handle the rest."
+                        placeholder="Describe the ingestion, triage, remediation, or reporting work you need next."
                         onChange={setInput}
                         onEnter={handleSubmit}
                         disabledChat={submitting}
@@ -126,7 +126,7 @@ const HomeInput: React.FC<HomeInputProps> = ({
 
                     <div className="home-input-quick-tasks-section">
                         <div className="home-input-quick-tasks-header">
-                            <Body1Strong>Quick tasks</Body1Strong>
+                            <Body1Strong>AI VM quick starts</Body1Strong>
                         </div>
 
                         <div className="home-input-quick-tasks">

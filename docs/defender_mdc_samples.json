@@ -1,0 +1,304 @@
+{
+  "api_samples": {
+    "authentication": {
+      "description": "Get Azure AD token for API access",
+      "method": "az account get-access-token",
+      "response": {
+        "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6...",
+        "expiresOn": "2024-01-20 15:30:00.000000",
+        "subscription": "66e84420-9ef4-4264-aedb-7beacbfe9e81",
+        "tenant": "6059f654-466e-4240-afef-51d8d9b51a82",
+        "tokenType": "Bearer"
+      }
+    },
+
+    "list_assessments": {
+      "description": "Get all security assessments",
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.com/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/providers/Microsoft.Security/assessments?api-version=2019-01-01-preview",
+        "headers": {
+          "Authorization": "Bearer {token}",
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "value": [
+          {
+            "id": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/providers/Microsoft.Security/assessments/1ff0b4c9-ed56-4de6-be9c-d7ab39645926",
+            "name": "1ff0b4c9-ed56-4de6-be9c-d7ab39645926",
+            "type": "Microsoft.Security/assessments",
+            "properties": {
+              "displayName": "Vulnerability assessment findings on virtual machines should be remediated",
+              "status": {
+                "code": "Unhealthy",
+                "severity": "High",
+                "description": "VMs have unresolved vulnerabilities"
+              },
+              "resourceDetails": {
+                "Id": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81",
+                "NativeResourceId": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81",
+                "Source": "Azure"
+              },
+              "additionalData": {
+                "subAssessmentsLink": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/providers/Microsoft.Security/assessments/1ff0b4c9-ed56-4de6-be9c-d7ab39645926/subAssessments"
+              }
+            }
+          }
+        ]
+      }
+    },
+
+    "get_subassessments_vulnerability": {
+      "description": "Get vulnerability sub-assessments",
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.com/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/providers/Microsoft.Security/assessments/1ff0b4c9-ed56-4de6-be9c-d7ab39645926/subAssessments?api-version=2019-01-01-preview",
+        "headers": {
+          "Authorization": "Bearer {token}",
+          "Content-Type": "application/json"
+        }
+      },
+      "response": {
+        "value": [
+          {
+            "id": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourceGroups/production-rg/providers/Microsoft.Compute/virtualMachines/web-server-01/providers/Microsoft.Security/assessments/1ff0b4c9-ed56-4de6-be9c-d7ab39645926/subAssessments/CVE-2024-1234",
+            "name": "CVE-2024-1234",
+            "type": "Microsoft.Security/assessments/subAssessments",
+            "properties": {
+              "id": "CVE-2024-1234",
+              "displayName": "CVE-2024-1234 - Critical vulnerability in OpenSSL 3.0.5",
+              "status": {
+                "code": "Unhealthy",
+                "severity": "Critical"
+              },
+              "resourceDetails": {
+                "id": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourceGroups/production-rg/providers/Microsoft.Compute/virtualMachines/web-server-01",
+                "source": "Azure"
+              },
+              "remediation": {
+                "description": "Update OpenSSL to version 3.0.8 or later. Run: sudo apt-get update && sudo apt-get upgrade openssl",
+                "scripts": [
+                  {
+                    "scriptType": "Bash",
+                    "script": "#!/bin/bash\nsudo apt-get update\nsudo apt-get upgrade -y openssl"
+                  }
+                ],
+                "automated": false
+              },
+              "timeGenerated": "2024-01-15T10:30:00Z",
+              "additionalData": {
+                "cve": ["CVE-2024-1234"],
+                "cvss": 9.8,
+                "cvss3": {
+                  "baseScore": 9.8,
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+                },
+                "severity": "Critical",
+                "patchable": true,
+                "vendorReference": "RHSA-2024-0123",
+                "publishedDate": "2024-01-10T00:00:00Z",
+                "exploitAvailable": true,
+                "exploitTypes": ["Remote Code Execution", "Memory Corruption"],
+                "softwareName": "openssl",
+                "version": "3.0.5",
+                "evidence": "Package scan detected vulnerable OpenSSL version 3.0.5 installed via APT",
+                "detectionMethod": "Package Manager Scan",
+                "firstDetected": "2024-01-15T10:30:00Z",
+                "lastSeen": "2024-01-19T14:20:00Z"
+              },
+              "category": "Vulnerability",
+              "impact": "Remote attackers can execute arbitrary code via crafted TLS handshake",
+              "description": "A critical vulnerability in OpenSSL allows remote code execution without authentication"
+            }
+          },
+          {
+            "id": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourceGroups/production-rg/providers/Microsoft.Compute/virtualMachines/app-server-02/providers/Microsoft.Security/assessments/1ff0b4c9-ed56-4de6-be9c-d7ab39645926/subAssessments/CVE-2023-5678",
+            "name": "CVE-2023-5678",
+            "type": "Microsoft.Security/assessments/subAssessments",
+            "properties": {
+              "id": "CVE-2023-5678",
+              "displayName": "CVE-2023-5678 - Remote code execution in Apache Log4j 2.14.1",
+              "status": {
+                "code": "Unhealthy",
+                "severity": "Critical"
+              },
+              "resourceDetails": {
+                "id": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourceGroups/production-rg/providers/Microsoft.Compute/virtualMachines/app-server-02",
+                "source": "Azure"
+              },
+              "remediation": {
+                "description": "Immediately upgrade Log4j to version 2.17.0 or later. Set system property log4j2.formatMsgNoLookups=true as temporary mitigation.",
+                "scripts": [],
+                "automated": false
+              },
+              "timeGenerated": "2024-01-14T08:15:00Z",
+              "additionalData": {
+                "cve": ["CVE-2023-5678", "CVE-2021-44228"],
+                "cvss": 10.0,
+                "severity": "Critical",
+                "patchable": true,
+                "port": 8080,
+                "protocol": "tcp",
+                "softwareName": "log4j-core",
+                "version": "2.14.1",
+                "evidence": "Vulnerable Log4j library detected in /opt/application/lib/log4j-core-2.14.1.jar",
+                "exploitAvailable": true,
+                "exploitTypes": ["Remote Code Execution", "JNDI Injection"]
+              }
+            }
+          }
+        ]
+      }
+    },
+
+    "get_subassessments_network": {
+      "description": "Network security finding example",
+      "response_sample": {
+        "properties": {
+          "id": "AZURE-NET-001",
+          "displayName": "SSH port exposed to internet",
+          "status": {
+            "code": "Unhealthy",
+            "severity": "High"
+          },
+          "additionalData": {
+            "port": 22,
+            "protocol": "tcp",
+            "severity": "High",
+            "vendorReference": "AZURE-NET-001",
+            "evidence": "Network scan detected SSH service exposed on public IP 40.112.255.100"
+          }
+        }
+      }
+    },
+
+    "get_subassessments_container": {
+      "description": "Container image vulnerability example",
+      "response_sample": {
+        "properties": {
+          "id": "CVE-2023-9999",
+          "displayName": "Vulnerable base image in container",
+          "additionalData": {
+            "cve": ["CVE-2023-9999"],
+            "severity": "Medium",
+            "imageDigest": "sha256:1234567890abcdef",
+            "registry": "myacr.azurecr.io",
+            "repository": "webapp",
+            "tag": "v1.2.3",
+            "softwareName": "node",
+            "version": "16.14.0"
+          }
+        }
+      }
+    },
+
+    "mapped_canonical_output": {
+      "description": "Final mapped output in canonical format",
+      "samples": [
+        {
+          "scanner_source": "defender_mdc",
+          "asset_identifiers": {
+            "resourceId": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourceGroups/production-rg/providers/Microsoft.Compute/virtualMachines/web-server-01",
+            "subscriptionId": "66e84420-9ef4-4264-aedb-7beacbfe9e81",
+            "resourceGroup": "production-rg",
+            "resourceName": "web-server-01"
+          },
+          "vuln_key": "CVE-2024-1234",
+          "cve": ["CVE-2024-1234"],
+          "severity": "critical",
+          "cvss": {
+            "baseScore": 9.8,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "first_seen": "2024-01-15T10:30:00Z",
+          "last_seen": "2024-01-19T14:20:00Z",
+          "status": "open",
+          "location": {
+            "softwareName": "openssl",
+            "version": "3.0.5"
+          },
+          "patch_available": true,
+          "solution": "Update OpenSSL to version 3.0.8 or later. Run: sudo apt-get update && sudo apt-get upgrade openssl",
+          "evidence": "Package scan detected vulnerable OpenSSL version 3.0.5 installed via APT",
+          "additional_info": {
+            "vendorReference": "RHSA-2024-0123",
+            "exploitAvailable": true,
+            "exploitTypes": ["Remote Code Execution", "Memory Corruption"],
+            "category": "Vulnerability",
+            "impact": "Remote attackers can execute arbitrary code via crafted TLS handshake"
+          }
+        },
+        {
+          "scanner_source": "defender_mdc",
+          "asset_identifiers": {
+            "resourceId": "/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/resourceGroups/production-rg/providers/Microsoft.Compute/virtualMachines/app-server-02"
+          },
+          "vuln_key": "CVE-2023-5678",
+          "cve": ["CVE-2023-5678", "CVE-2021-44228"],
+          "severity": "critical",
+          "cvss": {
+            "baseScore": 10.0
+          },
+          "first_seen": "2024-01-14T08:15:00Z",
+          "last_seen": "2024-01-14T08:15:00Z",
+          "status": "open",
+          "location": {
+            "port": 8080,
+            "protocol": "tcp",
+            "softwareName": "log4j-core",
+            "version": "2.14.1"
+          },
+          "patch_available": true,
+          "solution": "Immediately upgrade Log4j to version 2.17.0 or later",
+          "evidence": "Vulnerable Log4j library detected in /opt/application/lib/log4j-core-2.14.1.jar"
+        }
+      ]
+    },
+
+    "error_responses": {
+      "invalid_api_version": {
+        "error": {
+          "code": "InvalidApiVersionParameter",
+          "message": "The api-version '2024-01-01' is invalid. The supported versions are '2019-01-01-preview,2022-01-01-preview,2023-01-01-preview'."
+        }
+      },
+      "unauthorized": {
+        "error": {
+          "code": "AuthorizationFailed",
+          "message": "The client 'user@domain.com' with object id 'xxx' does not have authorization to perform action 'Microsoft.Security/assessments/read' over scope '/subscriptions/xxx'."
+        }
+      },
+      "rate_limit": {
+        "error": {
+          "code": "TooManyRequests",
+          "message": "The request rate is too high. Please retry after 60 seconds."
+        },
+        "headers": {
+          "x-ms-ratelimit-remaining-subscription-reads": "0",
+          "Retry-After": "60"
+        }
+      }
+    },
+
+    "pagination_example": {
+      "description": "Response with pagination",
+      "response": {
+        "value": ["... first 100 items ..."],
+        "nextLink": "https://management.azure.com/subscriptions/66e84420-9ef4-4264-aedb-7beacbfe9e81/providers/Microsoft.Security/assessments?api-version=2019-01-01-preview&$skip=100"
+      }
+    },
+
+    "filter_examples": {
+      "unhealthy_only": {
+        "url": "...?api-version=2019-01-01-preview&$filter=properties/status/code eq 'Unhealthy'"
+      },
+      "critical_severity": {
+        "url": "...?api-version=2019-01-01-preview&$filter=properties/status/severity eq 'Critical'"
+      },
+      "specific_resource": {
+        "url": "...?api-version=2019-01-01-preview&$filter=contains(properties/resourceDetails/Id, 'virtualMachines/web-server')"
+      }
+    }
+  }
+}

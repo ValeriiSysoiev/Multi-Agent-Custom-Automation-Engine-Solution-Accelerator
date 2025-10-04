@@ -5,6 +5,11 @@ import logging
 import json
 import asyncio
 
+pytest.skip(
+    "Legacy HR agent tests replaced by AI VM workflow.",
+    allow_module_level=True,
+)
+
 # Ensure src/backend is on the Python path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

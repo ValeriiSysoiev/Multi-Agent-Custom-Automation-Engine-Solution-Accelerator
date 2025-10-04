@@ -1,9 +1,14 @@
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, ClassVar, Dict, List, Literal, Optional
 
-from semantic_kernel.kernel_pydantic import Field, KernelBaseModel
+from pydantic import model_validator
+
+try:
+    from semantic_kernel.kernel_pydantic import Field, KernelBaseModel
+except ModuleNotFoundError:  # pragma: no cover - test fallback
+    from pydantic import BaseModel as KernelBaseModel, Field  # type: ignore
 
 
 # Classes specifically for handling runtime interrupts
@@ -34,22 +39,140 @@ class DataType(str, Enum):
     plan = "plan"
     step = "step"
     message = "message"
+    agent_message = "agent_message"
+    finding_raw = "finding_raw"
+    sync_state = "sync_state"
+    finding_canonical = "finding_canonical"
+    enrichment = "enrichment"
+    triage = "triage"
+    remediation_unit = "remediation_unit"
+    ticket = "ticket"
+    evidence = "evidence"
+    asset = "asset"
+    run_event = "run_event"
+    waiver = "waiver"
+    chat_query = "chat_query"
+    risk_treatment = "risk_treatment"
+
+
+class RiskTier(str, Enum):
+    """Risk tiers derived from likelihood × impact scoring."""
+
+    VERY_LOW = "very_low"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class RemediationBucket(str, Enum):
+    """Remediation workstreams considered by the platform."""
+
+    PATCH = "patch"
+    CONFIG = "config"
+    CODE = "code"
+    CONTROL = "control"
+
+
+class FindingLifecycleStatus(str, Enum):
+    """Lifecycle states for canonical vulnerability records."""
+
+    OPEN = "open"
+    TRIAGED = "triaged"
+    IN_REMEDIATION = "in_remediation"
+    MITIGATED = "mitigated"
+    RESOLVED = "resolved"
+    VERIFIED = "verified"
+    WAIVED = "waived"
+    REOPENED = "reopened"
+
+
+class VerificationStatus(str, Enum):
+    """Status of verification/evidence review."""
+
+    PENDING = "pending"
+    SUBMITTED = "submitted"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+class TicketStatus(str, Enum):
+    """Ticket lifecycle tracked inside the platform."""
+
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    VERIFIED = "verified"
+    CLOSED = "closed"
+    REOPENED = "reopened"
+    WAIVED = "waived"
+
+
+class WaiverStatus(str, Enum):
+    """Waiver approval lifecycle."""
+
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+class OwnershipStatus(str, Enum):
+    """Ownership resolution state for assets or findings."""
+
+    CONFIRMED = "confirmed"
+    PROVISIONAL = "provisional"
+    LINKAGE_REVIEW = "linkage_review"
+    UNKNOWN = "unknown"
+
+
+class ConfidenceLevel(str, Enum):
+    """Confidence attached to enrichment or threat signals."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class EvidenceType(str, Enum):
+    """Evidence types supported by the verification policy."""
+
+    TARGETED_RESCAN = "targeted_rescan"
+    CONFIG_PROOF = "config_proof"
+    CHANGE_RECORD = "change_record"
+    SBOM_DIFF = "sbom_diff"
+    FUNCTIONAL_PROBE = "functional_probe"
+    CONTROL_TELEMETRY = "control_telemetry"
+    VENDOR_ATTESTATION = "vendor_attestation"
+    OTHER = "other"
+
+
+class TreatmentRecommendation(str, Enum):
+    """Risk treatment recommendations produced during triage."""
+
+    MITIGATE = "mitigate"
+    ACCEPT = "accept"
+    TRANSFER = "transfer"
+    AVOID = "avoid"
 
 
 class AgentType(str, Enum):
-    """Enumeration of agent types."""
+    """Enumeration of agent types used in the AI VM workflow."""
 
     HUMAN = "Human_Agent"
-    HR = "Hr_Agent"
-    MARKETING = "Marketing_Agent"
-    PROCUREMENT = "Procurement_Agent"
-    PRODUCT = "Product_Agent"
     GENERIC = "Generic_Agent"
-    TECH_SUPPORT = "Tech_Support_Agent"
     GROUP_CHAT_MANAGER = "Group_Chat_Manager"
     PLANNER = "Planner_Agent"
-
-    # Add other agents as needed
+    INGESTION = "Ingestion_Agent"
+    DEDUPLICATION = "Deduplication_Agent"
+    ENRICHMENT = "Enrichment_Agent"
+    TRIAGE = "Triage_Agent"
+    REMEDIATION = "Remediation_Agent"
+    VERIFICATION = "Verification_Agent"
+    WAIVER = "Waiver_Agent"
+    REPORTING = "Reporting_Agent"
+    CHAT = "Chat_Agent"
 
 
 class StepStatus(str, Enum):
@@ -94,6 +217,105 @@ class BaseDataModel(KernelBaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ttl_seconds: Optional[int] = None
+    legal_hold: bool = False
+    data_class: Optional[str] = None
+    region_origin: Optional[str] = None
+
+
+class AssetIdentifierType(str, Enum):
+    """Types of identifiers that can describe an asset."""
+
+    CLOUD_RESOURCE_ID = "cloud_resource_id"
+    SCANNER_AGENT_ID = "scanner_agent_id"
+    HOSTNAME = "hostname"
+    MAC_ADDRESS = "mac_address"
+    IP_ADDRESS = "ip_address"
+    OTHER = "other"
+
+
+class AssetIdentifier(KernelBaseModel):
+    """Represents a single identifier associated with an asset."""
+
+    id_type: AssetIdentifierType
+    value: str
+    source: Optional[str] = None
+    last_observed: Optional[datetime] = None
+
+
+class SourceReference(KernelBaseModel):
+    """Reference to a scanner/source record backing a canonical finding."""
+
+    scanner_id: str
+    external_id: str
+    first_seen: datetime
+    last_seen: datetime
+    severity: Optional[str] = None
+    raw_finding_id: Optional[str] = None
+    status: Optional[str] = None
+
+
+class ThreatSignal(KernelBaseModel):
+    """Threat intelligence or exploit signal associated with a finding."""
+
+    source: str
+    signal_type: str
+    confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM
+    details: Optional[Dict[str, Any]] = None
+    retrieved_at: Optional[datetime] = None
+
+
+class ExposureSurface(KernelBaseModel):
+    """Exposure metadata for an asset or finding."""
+
+    internet_facing: bool = False
+    authentication_required: Optional[bool] = None
+    network_segment: Optional[str] = None
+    control_coverage: Dict[str, bool] = Field(default_factory=dict)
+
+
+class ApplicationContext(KernelBaseModel):
+    """Business metadata describing asset/application ownership."""
+
+    application: Optional[str] = None
+    business_service: Optional[str] = None
+    owner: Optional[str] = None
+    owner_email: Optional[str] = None
+    environment: Optional[str] = None
+    criticality: Optional[str] = None
+    tags: Dict[str, Any] = Field(default_factory=dict)
+    completeness: ConfidenceLevel = ConfidenceLevel.LOW
+
+
+class ResidualRisk(KernelBaseModel):
+    """Residual risk captured after remediation or waiver."""
+
+    risk_tier: RiskTier
+    risk_score: Optional[int] = None
+    likelihood: Optional[int] = None
+    impact: Optional[int] = None
+    rationale: Optional[str] = None
+
+
+class CompensatingControl(KernelBaseModel):
+    """Compensating control applied when durable fix is delayed."""
+
+    control_type: str
+    description: str
+    coverage_scope: Optional[str] = None
+    implemented_at: Optional[datetime] = None
+    verification_evidence_ids: List[str] = Field(default_factory=list)
+    owner: Optional[str] = None
+    valid_until: Optional[datetime] = None
+
+
+class LinkageReviewInfo(KernelBaseModel):
+    """Metadata tracking linkage review queue state."""
+
+    status: OwnershipStatus = OwnershipStatus.UNKNOWN
+    queued_at: Optional[datetime] = None
+    sla_due: Optional[datetime] = None
+    notes: Optional[str] = None
 
 
 # Basic message class for Semantic Kernel compatibility
@@ -116,7 +338,7 @@ class ChatMessage(KernelBaseModel):
 class StoredMessage(BaseDataModel):
     """Message stored in the database with additional metadata."""
 
-    data_type: Literal["message"] = Field("message", Literal=True)
+    data_type: Literal["message"] = Field("message")
     session_id: str
     user_id: str
     role: MessageRole
@@ -146,7 +368,7 @@ class StoredMessage(BaseDataModel):
 class AgentMessage(BaseDataModel):
     """Base class for messages sent between agents."""
 
-    data_type: Literal["agent_message"] = Field("agent_message", Literal=True)
+    data_type: Literal["agent_message"] = Field("agent_message")
     session_id: str
     user_id: str
     plan_id: str
@@ -158,7 +380,7 @@ class AgentMessage(BaseDataModel):
 class Session(BaseDataModel):
     """Represents a user session."""
 
-    data_type: Literal["session"] = Field("session", Literal=True)
+    data_type: Literal["session"] = Field("session")
     user_id: str
     current_status: str
     message_to_user: Optional[str] = None
@@ -167,7 +389,7 @@ class Session(BaseDataModel):
 class Plan(BaseDataModel):
     """Represents a plan containing multiple steps."""
 
-    data_type: Literal["plan"] = Field("plan", Literal=True)
+    data_type: Literal["plan"] = Field("plan")
     session_id: str
     user_id: str
     initial_goal: str
@@ -181,7 +403,7 @@ class Plan(BaseDataModel):
 class Step(BaseDataModel):
     """Represents an individual step (task) within a plan."""
 
-    data_type: Literal["step"] = Field("step", Literal=True)
+    data_type: Literal["step"] = Field("step")
     plan_id: str
     session_id: str  # Partition key
     user_id: str
@@ -192,12 +414,32 @@ class Step(BaseDataModel):
     human_feedback: Optional[str] = None
     human_approval_status: Optional[HumanFeedbackStatus] = HumanFeedbackStatus.requested
     updated_action: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+    _legacy_agent_map: ClassVar[Dict[str, str]] = {
+        "Hr_Agent": AgentType.HUMAN.value,
+        "Marketing_Agent": AgentType.HUMAN.value,
+        "Procurement_Agent": AgentType.HUMAN.value,
+        "Product_Agent": AgentType.GENERIC.value,
+        "Tech_Support_Agent": AgentType.GENERIC.value,
+    }
+
+    @model_validator(mode="before")
+    @classmethod
+    def _map_legacy_agent(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            agent_value = data.get("agent")
+            if isinstance(agent_value, str):
+                legacy = cls._legacy_agent_map.get(agent_value)
+                if legacy:
+                    data["agent"] = legacy
+        return data
 
 
 class ThreadIdAgent(BaseDataModel):
     """Represents an individual thread_id."""
 
-    data_type: Literal["thread"] = Field("thread", Literal=True)
+    data_type: Literal["thread"] = Field("thread")
     session_id: str  # Partition key
     user_id: str
     thread_id: str
@@ -206,12 +448,23 @@ class ThreadIdAgent(BaseDataModel):
 class AzureIdAgent(BaseDataModel):
     """Represents an individual thread_id."""
 
-    data_type: Literal["agent"] = Field("agent", Literal=True)
+    data_type: Literal["agent"] = Field("agent")
     session_id: str  # Partition key
     user_id: str
     action: str
     agent: AgentType
     agent_id: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _map_legacy_agent(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            agent_value = data.get("agent")
+            if isinstance(agent_value, str):
+                legacy = Step._legacy_agent_map.get(agent_value)
+                if legacy:
+                    data["agent"] = legacy
+        return data
 
 
 class PlanWithSteps(Plan):
@@ -262,6 +515,28 @@ class InputTask(KernelBaseModel):
 
     session_id: str
     description: str  # Initial goal
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ChatQuery(KernelBaseModel):
+    """Chat query payload for direct chat requests."""
+
+    question: str
+    session_id: Optional[str] = None
+    limit: Optional[int] = Field(default=20, ge=1, le=100)
+
+
+class ChatAnswer(KernelBaseModel):
+    """Structured chat response returned to clients."""
+
+    intent: str
+    question: str
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    scope: Dict[str, Any] = Field(default_factory=dict)
+    results: List[Dict[str, Any]] = Field(default_factory=list)
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
+    session_id: str
+    run_id: Optional[str] = None
 
 
 class UserLanguage(KernelBaseModel):
@@ -469,3 +744,267 @@ class SKFunctionRegistry:
         # Execute the function
         # This might vary based on SK's execution model
         return await function_obj(**kwargs)
+
+
+class RawFinding(BaseDataModel):
+    """Raw scanner payload (sanitized) stored for replay/audit."""
+
+    data_type: Literal[DataType.finding_raw.value] = Field(
+        DataType.finding_raw.value
+    )
+    scanner_id: str
+    ingestion_id: str
+    asset_identifiers: List[AssetIdentifier] = Field(default_factory=list)
+    normalized_signature: str
+    recorded_at: datetime
+    payload_preview: Optional[Dict[str, Any]] = None
+    redaction_applied: bool = False
+
+
+class SyncStateRecord(BaseDataModel):
+    """Tracks incremental ingestion cursors for scanners."""
+
+    data_type: Literal[DataType.sync_state.value] = Field(
+        DataType.sync_state.value
+    )
+    scanner_id: str
+    last_seen_timestamp: Optional[datetime] = None
+    last_seen_id: Optional[str] = None
+    cursor: Optional[str] = None
+    status: Optional[str] = None
+    retry_after: Optional[datetime] = None
+
+
+class CanonicalFinding(BaseDataModel):
+    """Deduplicated vulnerability-on-asset record."""
+
+    data_type: Literal[DataType.finding_canonical.value] = Field(
+        DataType.finding_canonical.value
+    )
+    canonical_id: str
+    asset_id: str
+    asset_identifiers: List[AssetIdentifier] = Field(default_factory=list)
+    sources: List[SourceReference] = Field(default_factory=list)
+    vuln_key: str
+    cwe: Optional[str] = None
+    cvss_score: Optional[float] = None
+    severity: Optional[str] = None
+    risk_tier: RiskTier
+    status: FindingLifecycleStatus = FindingLifecycleStatus.OPEN
+    remediation_bucket: RemediationBucket = RemediationBucket.PATCH
+    description: Optional[str] = None
+    recommendations: Optional[str] = None
+    first_observed: Optional[datetime] = None
+    last_observed: Optional[datetime] = None
+    ownership_status: OwnershipStatus = OwnershipStatus.UNKNOWN
+    linkage_review: Optional[LinkageReviewInfo] = None
+    remediation_unit_id: Optional[str] = None
+    treatment_follow_up_id: Optional[str] = None
+
+
+class EnrichmentRecord(BaseDataModel):
+    """Business and threat enrichment for a canonical finding."""
+
+    data_type: Literal[DataType.enrichment.value] = Field(
+        DataType.enrichment.value
+    )
+    canonical_id: str
+    asset_id: str
+    application_context: ApplicationContext = Field(default_factory=ApplicationContext)
+    exposure: ExposureSurface = Field(default_factory=ExposureSurface)
+    threat_signals: List[ThreatSignal] = Field(default_factory=list)
+    enrichment_version: Optional[str] = None
+
+
+class TriageRecord(BaseDataModel):
+    """Risk assessment output with rationale and treatment."""
+
+    data_type: Literal[DataType.triage.value] = Field(
+        DataType.triage.value
+    )
+    triage_id: str
+    canonical_id: str
+    created_by: str
+    likelihood: int
+    impact: int
+    risk_score: int
+    risk_tier: RiskTier
+    treatment: TreatmentRecommendation
+    rationale: str
+    supporting_inputs: Dict[str, Any] = Field(default_factory=dict)
+    residual_risk: ResidualRisk
+    supersedes: Optional[str] = None
+
+
+class RemediationUnitRecord(BaseDataModel):
+    """Represents a remediation unit grouping multiple findings."""
+
+    data_type: Literal[DataType.remediation_unit.value] = Field(
+        DataType.remediation_unit.value
+    )
+    remediation_unit_id: str
+    name: Optional[str] = None
+    bucket: RemediationBucket
+    risk_tier: RiskTier
+    status: FindingLifecycleStatus = FindingLifecycleStatus.IN_REMEDIATION
+    canonical_ids: List[str] = Field(default_factory=list)
+    target_due_date: Optional[datetime] = None
+    owner: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TicketRecord(BaseDataModel):
+    """Represents linkage to an external ticketing system."""
+
+    data_type: Literal[DataType.ticket.value] = Field(
+        DataType.ticket.value
+    )
+    ticket_id: str
+    remediation_unit_id: str
+    external_key: str
+    url: Optional[str] = None
+    status: TicketStatus
+    assigned_to: Optional[str] = None
+    opened_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+    verified_at: Optional[datetime] = None
+    due_at: Optional[datetime] = None
+    ack_due: Optional[datetime] = None
+    verify_due: Optional[datetime] = None
+    sla_breached: bool = False
+
+
+class RiskTreatmentWorkflow(str, Enum):
+    """Workflows applied to non-mitigate treatments."""
+
+    WAIVER = "waiver"
+    RISK_TRANSFER = "risk_transfer"
+
+
+class RiskTreatmentStatus(str, Enum):
+    """Lifecycle of treatment follow-up tasks."""
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class RiskTreatmentTask(BaseDataModel):
+    """Tracks follow-up required for accept/transfer treatments."""
+
+    data_type: Literal[DataType.risk_treatment.value] = Field(
+        DataType.risk_treatment.value
+    )
+    task_id: str
+    canonical_id: str
+    triage_id: str
+    asset_id: str
+    asset_owner: Optional[str] = None
+    application: Optional[str] = None
+    workflow: RiskTreatmentWorkflow
+    treatment: TreatmentRecommendation
+    risk_tier: RiskTier
+    residual_risk: ResidualRisk
+    status: RiskTreatmentStatus = RiskTreatmentStatus.PENDING
+    rationale: Optional[str] = None
+    requested_by: Optional[str] = None
+    requested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    justification: Optional[str] = None
+    compensating_controls: List[str] = Field(default_factory=list)
+    proposed_expiry: Optional[datetime] = None
+    triage_reference: Optional[str] = None
+    ticket_key: Optional[str] = None
+    ticket_url: Optional[str] = None
+    ticket_status: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class EvidenceRecord(BaseDataModel):
+    """Verification evidence captured for remediation."""
+
+    data_type: Literal[DataType.evidence.value] = Field(
+        DataType.evidence.value
+    )
+    evidence_id: str
+    canonical_id: Optional[str] = None
+    remediation_unit_id: Optional[str] = None
+    ticket_id: Optional[str] = None
+    evidence_type: EvidenceType
+    source_uri: Optional[str] = None
+    submitted_by: Optional[str] = None
+    captured_at: datetime
+    verifier_id: Optional[str] = None
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+    details: Optional[Dict[str, Any]] = None
+
+
+
+
+class AssetRecord(BaseDataModel):
+    """Authoritative asset inventory metadata."""
+
+    data_type: Literal[DataType.asset.value] = Field(DataType.asset.value)
+    asset_id: str
+    identifiers: List[AssetIdentifier] = Field(default_factory=list)
+    application_context: ApplicationContext = Field(default_factory=ApplicationContext)
+    ownership_status: OwnershipStatus = OwnershipStatus.UNKNOWN
+    linkage_review: Optional[LinkageReviewInfo] = None
+
+
+class RunEventRecord(BaseDataModel):
+    """Telemetry for agent runs and background jobs."""
+
+    data_type: Literal[DataType.run_event.value] = Field(
+        DataType.run_event.value
+    )
+    correlation_id: str
+    agent_name: str
+    run_type: Optional[str] = None
+    status: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = None
+
+
+class WaiverApproval(KernelBaseModel):
+    """Tracks individual approvals with role attribution."""
+
+    approver: str
+    role: str
+    approved_at: datetime
+
+
+class WaiverRecord(BaseDataModel):
+    """Stores waiver/exception approvals and compensating controls."""
+
+    data_type: Literal[DataType.waiver.value] = Field(
+        DataType.waiver.value
+    )
+    waiver_id: str
+    remediation_unit_id: str
+    risk_tier: RiskTier
+    status: WaiverStatus = WaiverStatus.REQUESTED
+    requested_by: str
+    requested_at: datetime
+    justification: str
+    compensating_controls: List[CompensatingControl] = Field(default_factory=list)
+    residual_risk: ResidualRisk
+    ticket_id: Optional[str] = None
+    ticket_key: Optional[str] = None
+    ticket_url: Optional[str] = None
+    approvals: List[WaiverApproval] = Field(default_factory=list)
+    approved_by: Optional[List[str]] = None
+    approved_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    renewal_count: int = 0
+    verification_plan: Optional[str] = None
+
+# Backward compatibility aliases
+LegacyAssetRecord = AssetRecord
+LegacyAssetIdentifier = AssetIdentifier
+AssetRecordLegacy = AssetRecord
+AssetIdentifierLegacy = AssetIdentifier

@@ -1,4 +1,9 @@
-import { DocumentEdit20Regular, Person20Regular, Phone20Regular, ShoppingBag20Regular } from "@fluentui/react-icons";
+import {
+    DatabaseArrowDown20Regular,
+    ShieldCheckmark20Regular,
+    ClipboardTaskListLtr20Regular,
+    ArrowTrendingLines20Regular,
+} from "@fluentui/react-icons";
 
 export interface QuickTask {
     id: string;
@@ -9,28 +14,28 @@ export interface QuickTask {
 
 export const quickTasks: QuickTask[] = [
     {
-        id: "onboard",
-        title: "Onboard employee",
-        description: "Onboard a new employee, Jessica Smith.",
-        icon: <Person20Regular />,
+        id: "ingest",
+        title: "Ingest latest scans",
+        description: "Pull the newest Qualys and Defender results and highlight what changed.",
+        icon: <DatabaseArrowDown20Regular />,
     },
     {
-        id: "mobile",
-        title: "Mobile plan query",
-        description: "Ask about roaming plans prior to heading overseas.",
-        icon: <Phone20Regular />,
+        id: "triage",
+        title: "Review triage backlog",
+        description: "Score today's backlog and surface the riskiest findings for action.",
+        icon: <ShieldCheckmark20Regular />,
     },
     {
-        id: "addon",
-        title: "Buy add-on",
-        description: "Enable roaming on mobile plan, starting next week.",
-        icon: <ShoppingBag20Regular />,
+        id: "remediation",
+        title: "Prepare remediation wave",
+        description: "Bundle high-risk items and generate the Jira work needed to fix them.",
+        icon: <ClipboardTaskListLtr20Regular />,
     },
     {
-        id: "press",
-        title: "Draft a press release",
-        description: "Write a press release about our current products.",
-        icon: <DocumentEdit20Regular />,
+        id: "lifecycle",
+        title: "Run end-to-end VM cycle",
+        description: "Kick off ingestion, dedup, enrichment, triage, remediation, verification, and reporting in sequence.",
+        icon: <ArrowTrendingLines20Regular />,
     },
 ];
 

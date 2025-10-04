@@ -1,0 +1,45 @@
+# Waiver policy enforcing compensating control minimums and approval matrix.
+
+control_requirements:
+  critical:
+    min_controls: 2
+    strong_types:
+      - waf
+      - acl
+      - segmentation
+      - edr
+      - iam
+  high:
+    min_controls: 1
+    strong_types:
+      - waf
+      - acl
+      - segmentation
+      - edr
+      - iam
+  medium:
+    min_controls: 0
+  low:
+    min_controls: 0
+
+approval_matrix:
+  critical:
+    required_roles:
+      - security_lead
+      - platform_lead
+      - ciso
+      - app_vp
+  high:
+    required_roles:
+      - security_lead
+      - platform_lead
+      - security_director
+      - product_director
+  medium:
+    required_roles:
+      - vm_program_manager
+      - security_manager
+  low:
+    required_roles:
+      - vm_analyst
+      - vm_lead

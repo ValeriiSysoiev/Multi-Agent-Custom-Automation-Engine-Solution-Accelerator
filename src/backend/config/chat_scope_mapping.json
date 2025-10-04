@@ -1,0 +1,19 @@
+{
+  "admin_roles": ["security.admin", "ciso", "security_lead"],
+  "role_mapping": {
+    "platform.ops": {
+      "owner_groups": ["Platform Operations"]
+    },
+    "app.owner": {
+      "applications_from_claim": true
+    }
+  },
+  "group_mapping": {
+    "platform-ops-group": "Platform Operations"
+  },
+  "application_mapping": {
+    "payments_app": ["Payments Platform"],
+    "crm": ["Customer Relationship Management"]
+  },
+  "default_owner_groups": ["Platform Operations"]
+}

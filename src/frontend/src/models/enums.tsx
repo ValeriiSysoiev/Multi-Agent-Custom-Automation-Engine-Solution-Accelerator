@@ -7,14 +7,18 @@
  */
 export enum AgentType {
     HUMAN = "Human_Agent",
-    HR = "Hr_Agent",
-    MARKETING = "Marketing_Agent",
-    PROCUREMENT = "Procurement_Agent",
-    PRODUCT = "Product_Agent",
     GENERIC = "Generic_Agent",
-    TECH_SUPPORT = "Tech_Support_Agent",
     GROUP_CHAT_MANAGER = "Group_Chat_Manager",
-    PLANNER = "Planner_Agent"
+    PLANNER = "Planner_Agent",
+    INGESTION = "Ingestion_Agent",
+    DEDUPLICATION = "Deduplication_Agent",
+    ENRICHMENT = "Enrichment_Agent",
+    TRIAGE = "Triage_Agent",
+    REMEDIATION = "Remediation_Agent",
+    VERIFICATION = "Verification_Agent",
+    WAIVER = "Waiver_Agent",
+    REPORTING = "Reporting_Agent",
+    CHAT = "Chat_Agent"
 }
 
 export enum role {

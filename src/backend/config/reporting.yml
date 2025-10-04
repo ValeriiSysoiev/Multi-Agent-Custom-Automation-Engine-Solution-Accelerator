@@ -1,0 +1,10 @@
+tenant_id: 6059f654-466e-4240-afef-51d8d9b51a82
+client_id: 712006fa-1cbd-4f92-9fce-6f6a2ef23d42
+workspace_id: 8f802077-e058-4aac-ae18-0335bbbf59ab
+workspace_name: AI VM Reporting
+storage_account: stgaivmreporting
+storage_container: aivm-reporting
+dataset_id: de1a1867-5e8a-40c3-8587-ed7912d33609
+push_dataset_enabled: true
+export_format: parquet
+managed_identity_client_id: ""  # optional override; defaults to env vars

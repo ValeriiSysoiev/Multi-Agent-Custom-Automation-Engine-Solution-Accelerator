@@ -1,9 +1,11 @@
 # app_kernel.py
 import asyncio
+import json
 import logging
 import os
 import uuid
-from typing import Dict, List, Optional
+from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional
 
 # Semantic Kernel imports
 from app_config import config
@@ -20,18 +22,28 @@ from event_utils import track_event_if_configured
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from kernel_agents.agent_factory import AgentFactory
+from kernel_agents.group_chat_manager import GroupChatManager
+from services.chat_access_policy import AccessDeniedError
+from services.defender_mdc_client import DefenderIngestionService
+from services.enrichment_service import EnrichmentService
+from services.key_vault import KeyVaultService
+from services.qualys_client import QualysIngestionService
+from services.vulnerability_pipeline import PipelineRunResult, VulnerabilityPipeline
 
 # Local imports
 from middleware.health_check import HealthCheckMiddleware
 from models.messages_kernel import (
     AgentMessage,
     AgentType,
+    ChatAnswer,
+    ChatQuery,
     HumanClarification,
     HumanFeedback,
     InputTask,
     PlanWithSteps,
+    SKChatHistory,
     Step,
-    UserLanguage
+    UserLanguage,
 )
 
 # Updated import for KernelArguments
@@ -66,8 +78,37 @@ logging.getLogger("azure.monitor.opentelemetry.exporter.export._base").setLevel(
     logging.WARNING
 )
 
-# Initialize the FastAPI app
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Warmup credentials and resources on startup, cleanup on shutdown."""
+    # Startup: warm up Azure credentials by pre-fetching tokens
+    logging.info("Warming up Azure credentials...")
+    try:
+        vault = KeyVaultService()
+        # Pre-fetch JIRA PAT to warm up Key Vault credential
+        await vault.get_secret("JIRA-PAT")
+        logging.info("Successfully warmed up Key Vault credential")
+    except Exception as exc:
+        logging.warning(f"Failed to warm up Key Vault credential: {exc}")
+
+    try:
+        # Pre-fetch PowerBI secret to warm up credential for reporting
+        await vault.get_secret("POWERBI-CLIENT-SECRET")
+        logging.info("Successfully warmed up PowerBI credential")
+    except Exception as exc:
+        logging.warning(f"Failed to warm up PowerBI credential: {exc}")
+
+    logging.info("Credential warmup complete")
+
+    yield
+
+    # Shutdown: cleanup resources
+    logging.info("Shutting down application...")
+
+
+# Initialize the FastAPI app with lifespan
+app = FastAPI(lifespan=lifespan)
 
 frontend_url = Config.FRONTEND_SITE_NAME
 
@@ -168,6 +209,52 @@ async def user_browser_language_endpoint(
     return {"status": "Language received successfully"}
 
 
+def _serialize_pipeline_result(result: PipelineRunResult) -> Dict[str, Any]:
+    return {
+        "totalIngested": result.total_ingested,
+        "totalEnriched": result.total_enriched,
+        "ingested": [
+            {
+                "scanner": ingestion.scanner_id,
+                "count": ingestion.processed,
+                "canonicals": len(ingestion.canonical_findings),
+            }
+            for ingestion in result.ingestion_results
+        ],
+        "enrichedCanonicalIds": result.enriched,
+    }
+
+
+@app.post("/api/vm/pipeline/run")
+async def run_vulnerability_pipeline() -> Dict[str, Any]:
+    """Trigger a full ingestion → enrichment pipeline cycle."""
+
+    subscription_id = os.getenv("SUBSCRIPTION_ID")
+    defender_service = (
+        DefenderIngestionService(subscription_id=subscription_id)
+        if subscription_id
+        else None
+    )
+
+    qualys_service = QualysIngestionService(base_url=os.getenv("QUALYS_BASE_URL"))
+
+    if defender_service is None and qualys_service is None:
+        raise HTTPException(status_code=400, detail="No ingestion services configured")
+
+    pipeline = VulnerabilityPipeline(
+        defender_ingestion=defender_service,
+        qualys_ingestion=qualys_service,
+        enrichment_service=EnrichmentService(),
+    )
+
+    try:
+        result = await pipeline.run_cycle()
+    finally:
+        await pipeline.close()
+
+    return _serialize_pipeline_result(result)
+
+
 @app.post("/api/input_task")
 async def input_task_endpoint(input_task: InputTask, request: Request):
     """
@@ -198,6 +285,14 @@ async def input_task_endpoint(input_task: InputTask, request: Request):
         )
         raise HTTPException(status_code=400, detail="no user")
 
+    user_scope = {
+        "roles": authenticated_user.get("user_roles", []),
+        "applications": authenticated_user.get("applications", []),
+        "owner_groups": authenticated_user.get("groups", []),
+    }
+    input_task.metadata = input_task.metadata or {}
+    input_task.metadata.setdefault("user_scope", user_scope)
+
     # Generate session ID if not provided
     if not input_task.session_id:
         input_task.session_id = str(uuid.uuid4())
@@ -225,7 +320,19 @@ async def input_task_endpoint(input_task: InputTask, request: Request):
         ) from setup_exc
 
     try:
-        group_chat_manager = agents[AgentType.GROUP_CHAT_MANAGER.value]
+        group_chat_manager = (
+            agents.get(AgentType.GROUP_CHAT_MANAGER)
+            or agents.get(AgentType.GROUP_CHAT_MANAGER.value)
+        )
+        if not group_chat_manager:
+            track_event_if_configured(
+                "AgentNotFound",
+                {
+                    "status": "GroupChatManager missing",
+                    "session_id": input_task.session_id,
+                },
+            )
+            raise HTTPException(status_code=500, detail="Group chat manager not available")
         await group_chat_manager.handle_input_task(input_task)
 
         plan = await memory_store.get_plan_by_session(input_task.session_id)
@@ -262,13 +369,73 @@ async def input_task_endpoint(input_task: InputTask, request: Request):
             {"session_id": input_task.session_id, "error": str(e)},
         )
         raise HTTPException(status_code=400, detail=f"Error processing plan: {error_msg}") from e
-    finally:
-        # Ensure the client is closed even if an error occurs
-        if 'client' in locals() and client:
-            try:
-                client.close()
-            except Exception as e:
-                logging.error(f"Error closing AIProjectClient: {e}")
+
+
+@app.post("/api/chat", response_model=ChatAnswer)
+async def chat_endpoint(payload: ChatQuery, request: Request) -> ChatAnswer:
+    """Answer a chat question using the stored VM data set."""
+
+    question = (payload.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question must not be empty")
+
+    authenticated_user = get_authenticated_user_details(request_headers=request.headers)
+    user_id = authenticated_user.get("user_principal_id")
+    if not user_id:
+        track_event_if_configured(
+            "UserIdNotFound",
+            {"status_code": 400, "detail": "no user"},
+        )
+        raise HTTPException(status_code=400, detail="no user")
+
+    user_scope = {
+        "roles": authenticated_user.get("user_roles", []),
+        "applications": authenticated_user.get("applications", []),
+        "owner_groups": authenticated_user.get("groups", []),
+    }
+
+    session_id = payload.session_id or str(uuid.uuid4())
+    _, memory_store = await initialize_runtime_and_context(session_id, user_id)
+    chat_history = SKChatHistory(memory_store)
+
+    chat_service = AgentFactory.get_chat_service()
+    try:
+        result = await chat_service.answer_question(
+            question=question,
+            user_context=user_scope,
+            limit=payload.limit or 20,
+        )
+    except AccessDeniedError as exc:
+        track_event_if_configured(
+            "ChatQueryAccessDenied",
+            {"user_id": user_id, "reason": str(exc)},
+        )
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    enriched_result = dict(result)
+    enriched_result["session_id"] = session_id
+
+    track_event_if_configured(
+        "ChatQueryProcessed",
+        {
+            "user_id": user_id,
+            "intent": enriched_result.get("intent"),
+            "result_count": len(enriched_result.get("results", [])),
+        },
+    )
+
+    await chat_history.add_user_message(
+        session_id=session_id,
+        user_id=user_id,
+        content=question,
+    )
+    await chat_history.add_assistant_message(
+        session_id=session_id,
+        user_id=user_id,
+        content=json.dumps(enriched_result, ensure_ascii=False, default=str),
+    )
+
+    return ChatAnswer(**enriched_result)
 
 
 @app.post("/api/human_feedback")
@@ -375,11 +542,6 @@ async def human_feedback_endpoint(human_feedback: HumanFeedback, request: Reques
             "step_id": human_feedback.step_id,
         },
     )
-    if client:
-        try:
-            client.close()
-        except Exception as e:
-            logging.error(f"Error sending to AIProjectClient: {e}")
     return {
         "status": "Feedback received",
         "session_id": human_feedback.session_id,
@@ -487,6 +649,12 @@ async def human_clarification_endpoint(
         human_clarification=human_clarification
     )
 
+    if client:
+        try:
+            client.close()
+        except Exception as e:  # pragma: no cover - best effort cleanup
+            logging.error(f"Error sending to AIProjectClient: {e}")
+
     track_event_if_configured(
         "Completed Human clarification on the plan",
         {
@@ -494,20 +662,45 @@ async def human_clarification_endpoint(
             "session_id": human_clarification.session_id,
         },
     )
-    if client:
-        try:
-            client.close()
-        except Exception as e:
-            logging.error(f"Error sending to AIProjectClient: {e}")
     return {
         "status": "Clarification received",
         "session_id": human_clarification.session_id,
     }
 
 
+_PENDING_FEEDBACK_TASKS: dict[tuple[str, str], asyncio.Task] = {}
+
+
+async def _execute_human_feedback(
+    manager: GroupChatManager,
+    feedback: HumanFeedback,
+    client,
+) -> None:
+    try:
+        await manager.handle_human_feedback(feedback)
+        event_payload = {
+            "session_id": feedback.session_id,
+            "step_id": feedback.step_id,
+            "approved": feedback.approved,
+        }
+        track_event_if_configured(
+            "Completed human feedback processing",
+            event_payload,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logging.exception("Background human feedback processing failed: %s", exc)
+    finally:
+        if client:
+            try:
+                client.close()
+            except Exception as close_exc:  # pragma: no cover - best effort cleanup
+                logging.error("Error closing AIProjectClient: %s", close_exc)
+
+
 @app.post("/api/approve_step_or_steps")
 async def approve_step_endpoint(
-    human_feedback: HumanFeedback, request: Request
+    human_feedback: HumanFeedback,
+    request: Request,
 ) -> Dict[str, str]:
     """
     Approve a step or multiple steps in a plan.
@@ -584,34 +777,71 @@ async def approve_step_endpoint(
     )
 
     # Send the approval to the group chat manager
-    group_chat_manager = agents[AgentType.GROUP_CHAT_MANAGER.value]
-
-    await group_chat_manager.handle_human_feedback(human_feedback)
-
-    if client:
-        try:
-            client.close()
-        except Exception as e:
-            logging.error(f"Error sending to AIProjectClient: {e}")
-    # Return a status message
-    if human_feedback.step_id:
+    group_chat_manager = (
+        agents.get(AgentType.GROUP_CHAT_MANAGER)
+        or agents.get(AgentType.GROUP_CHAT_MANAGER.value)
+    )
+    if not group_chat_manager:
         track_event_if_configured(
-            "Completed Human clarification with step_id",
+            "AgentNotFound",
             {
-                "status": f"Step {human_feedback.step_id} - Approval:{human_feedback.approved}."
+                "status": "GroupChatManager missing",
+                "session_id": human_feedback.session_id,
             },
         )
+        raise HTTPException(status_code=500, detail="Group chat manager not available")
 
-        return {
-            "status": f"Step {human_feedback.step_id} - Approval:{human_feedback.approved}."
-        }
-    else:
-        track_event_if_configured(
-            "Completed Human clarification without step_id",
-            {"status": "All steps approved"},
+    task_key = (
+        human_feedback.session_id,
+        human_feedback.step_id or "__plan__",
+    )
+
+    existing_task = _PENDING_FEEDBACK_TASKS.get(task_key)
+    if existing_task and not existing_task.done():
+        logging.info(
+            "Human feedback already in progress for session %s step %s",
+            human_feedback.session_id,
+            human_feedback.step_id,
         )
+        return {
+            "status": "Processing already in progress",
+            "session_id": human_feedback.session_id,
+            "step_id": human_feedback.step_id,
+        }
 
-        return {"status": "All steps approved"}
+    task = asyncio.create_task(
+        _execute_human_feedback(group_chat_manager, human_feedback, client)
+    )
+    _PENDING_FEEDBACK_TASKS[task_key] = task
+
+    def _cleanup_pending_task(completed: asyncio.Task, key: tuple[str, str]) -> None:
+        _PENDING_FEEDBACK_TASKS.pop(key, None)
+
+    task.add_done_callback(lambda completed, key=task_key: _cleanup_pending_task(completed, key))
+
+    logging.info(
+        "Queued human feedback processing for session %s step %s",
+        human_feedback.session_id,
+        human_feedback.step_id,
+    )
+
+    track_event_if_configured(
+        "Queued human feedback processing",
+        {
+            "session_id": human_feedback.session_id,
+            "step_id": human_feedback.step_id,
+            "approved": human_feedback.approved,
+        },
+    )
+
+    response_payload: Dict[str, str] = {
+        "status": "Processing started",
+        "session_id": human_feedback.session_id,
+    }
+    if human_feedback.step_id:
+        response_payload["step_id"] = human_feedback.step_id
+
+    return response_payload
 
 
 @app.get("/api/plans")
@@ -1067,6 +1297,14 @@ async def get_agent_tools():
                 description: Arguments required by the tool function
     """
     return []
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Ensure shared clients are properly closed on application shutdown."""
+
+    await config.close_ai_project_client()
+    await config.close_secret_client()
 
 
 # Run the app

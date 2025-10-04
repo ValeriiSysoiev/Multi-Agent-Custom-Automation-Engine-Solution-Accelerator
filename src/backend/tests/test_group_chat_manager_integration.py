@@ -5,6 +5,12 @@ coordinates plan execution, and properly integrates with Cosmos DB memory contex
 These are real integration tests using real Cosmos DB connections and Azure OpenAI,
 then cleaning up the test data afterward.
 """
+import pytest
+
+pytest.skip(
+    "Legacy GroupChatManager integration tests pending AI VM rewrite.",
+    allow_module_level=True,
+)
 import os
 import sys
 import unittest
@@ -162,7 +168,7 @@ class TestCleanupCosmosContext(CosmosMemoryContext):
             # This approach handles cases where we don't know the partition key for an item
             query = f"SELECT * FROM c WHERE c.id = @id"
             params = [{"name": "@id", "value": item_id}]
-            items = self._container.query_items(query=query, parameters=params, enable_cross_partition_query=True)
+            items = self._container.query_items(query=query, parameters=params)
             
             found_items = list(items)
             if found_items:

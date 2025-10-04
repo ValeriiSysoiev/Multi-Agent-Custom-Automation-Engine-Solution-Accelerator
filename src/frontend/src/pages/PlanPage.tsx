@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
     Text,
@@ -10,7 +10,7 @@ import CoralShellRow from "../coral/components/Layout/CoralShellRow";
 import Content from "../coral/components/Content/Content";
 import { NewTaskService } from "../services/NewTaskService";
 import { PlanDataService } from "../services/PlanDataService";
-import { Step, ProcessedPlanData } from "@/models";
+import { Step, ProcessedPlanData, AgentType, StepStatus } from "@/models";
 import PlanPanelLeft from "@/components/content/PlanPanelLeft";
 import ContentToolbar from "@/coral/components/Content/ContentToolbar";
 import PlanChat from "@/components/content/PlanChat";
@@ -42,6 +42,9 @@ const PlanPage: React.FC = () => {
         null
     );
     const [reloadLeftList, setReloadLeftList] = useState(true);
+    const [polling, setPolling] = useState(false);
+    const pollingDeadlineRef = useRef<number | null>(null);
+    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
 
@@ -78,16 +81,19 @@ const PlanPage: React.FC = () => {
                 }
 
                 setError(null);
-                const data = await PlanDataService.fetchPlanData(planId,navigate);
-                let plans = [...allPlans];
-                const existingIndex = plans.findIndex(p => p.plan.id === data.plan.id);
-                if (existingIndex !== -1) {
-                    plans[existingIndex] = data;
-                } else {
-                    plans.push(data);
-                }
-                setAllPlans(plans);
-                //setPlanData(data);
+                const data = await PlanDataService.fetchPlanData(planId, navigate);
+                setAllPlans((previous) => {
+                    const plans = [...previous];
+                    const existingIndex = plans.findIndex(
+                        (p) => p.plan.id === data.plan.id
+                    );
+                    if (existingIndex !== -1) {
+                        plans[existingIndex] = data;
+                    } else {
+                        plans.push(data);
+                    }
+                    return plans;
+                });
             } catch (err) {
                 console.log("Failed to load plan data:", err);
                 setError(
@@ -132,6 +138,15 @@ const PlanPage: React.FC = () => {
         [planData, loadPlanData]
     );
 
+    const stopPolling = useCallback(() => {
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+        pollingDeadlineRef.current = null;
+        setPolling(false);
+    }, []);
+
     const handleApproveStep = useCallback(
         async (step: Step, total: number, completed: number, approve: boolean) => {
             setProcessingSubtaskId(step.id);
@@ -141,10 +156,16 @@ const PlanPage: React.FC = () => {
             try {
                 let approveRejectDetails = await PlanDataService.stepStatus(step, approve);
                 dismissToast(id);
-                showToast(`Step ${approve ? "approved" : "rejected"} successfully`, "success");
+                showToast(
+                    `Step ${approve ? "approved" : "rejected"}. Workflow continuing in background...`,
+                    "success"
+                );
                 if (approveRejectDetails && Object.keys(approveRejectDetails).length > 0) {
                     await loadPlanData(false);
                 }
+                // allow up to 30 minutes for long-running orchestrations
+                pollingDeadlineRef.current = Date.now() + 30 * 60 * 1000;
+                setPolling(true);
                 setReloadLeftList(true);
             } catch (error) {
                 dismissToast(id);
@@ -154,13 +175,69 @@ const PlanPage: React.FC = () => {
                 setSubmitting(false);
             }
         },
-        [loadPlanData]
+        [loadPlanData, showToast]
     );
 
 
     useEffect(() => {
         loadPlanData(true);
     }, [loadPlanData]);
+
+    useEffect(() => {
+        if (!polling) {
+            return;
+        }
+
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+        }
+
+        pollingIntervalRef.current = setInterval(async () => {
+            if (pollingDeadlineRef.current && Date.now() > pollingDeadlineRef.current) {
+                stopPolling();
+                showToast("Workflow still running. Please refresh in a moment.", "warning");
+                return;
+            }
+            await loadPlanData(false);
+        }, 5000);
+
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        };
+    }, [polling, loadPlanData, showToast, stopPolling]);
+
+    useEffect(() => {
+        if (!polling || !planData?.steps) {
+            return;
+        }
+
+        const pendingStatuses: StepStatus[] = [
+            StepStatus.PLANNED,
+            StepStatus.AWAITING_FEEDBACK,
+            StepStatus.APPROVED,
+            StepStatus.ACTION_REQUESTED,
+        ];
+
+        const pendingStepExists = planData.steps.some((step: Step) =>
+            pendingStatuses.includes(step.status)
+        );
+
+        if (!pendingStepExists) {
+            stopPolling();
+        }
+    }, [planData, polling, stopPolling]);
+
+    useEffect(() => {
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        };
+    }, []);
 
     const handleNewTaskButton = () => {
         NewTaskService.handleNewTaskFromPlan(navigate);

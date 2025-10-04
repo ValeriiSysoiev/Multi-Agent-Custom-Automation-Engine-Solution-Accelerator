@@ -1,54 +1,89 @@
+
 # src/backend/tests/context/test_cosmos_memory.py
 # Drop-in test that self-stubs all external imports used by cosmos_memory_kernel
 # so we don't need to modify the repo structure or CI env.
 
+import os
 import sys
 import types
+from pathlib import Path
+
 import pytest
 from unittest.mock import AsyncMock
 
-# ----------------- Preload stub modules so the SUT can import cleanly -----------------
+CURRENT_FILE = Path(__file__).resolve()
+REPO_ROOT = CURRENT_FILE.parents[4]
+SRC_ROOT = REPO_ROOT / "src"
+BACKEND_DIR = SRC_ROOT / "backend"
 
-# 1) helpers.azure_credential_utils.get_azure_credential
-helpers_mod = types.ModuleType("helpers")
-helpers_cred_mod = types.ModuleType("helpers.azure_credential_utils")
-def _fake_get_azure_credential(*_a, **_k):
-    return object()
-helpers_cred_mod.get_azure_credential = _fake_get_azure_credential
-helpers_mod.azure_credential_utils = helpers_cred_mod
-sys.modules.setdefault("helpers", helpers_mod)
-sys.modules.setdefault("helpers.azure_credential_utils", helpers_cred_mod)
+for path in (REPO_ROOT, SRC_ROOT, BACKEND_DIR):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
 
-# 2) app_config.config (the SUT does: from app_config import config)
-app_config_mod = types.ModuleType("app_config")
-app_config_mod.config = types.SimpleNamespace(
-    COSMOSDB_CONTAINER="mock-container",
-    COSMOSDB_ENDPOINT="https://mock-endpoint",
-    COSMOSDB_DATABASE="mock-database",
-    AZURE_CLIENT_ID="mock-client-id",
-)
-sys.modules.setdefault("app_config", app_config_mod)
+from src.backend.models import messages_kernel as real_messages_kernel
+from src.backend import app_config
 
-# 3) models.messages_kernel (the SUT does: from models.messages_kernel import ...)
-models_mod = types.ModuleType("models")
-models_messages_mod = types.ModuleType("models.messages_kernel")
+sys.modules.setdefault("models", types.ModuleType("models"))
+sys.modules["models"].messages_kernel = real_messages_kernel
+sys.modules["models.messages_kernel"] = real_messages_kernel
 
-# Minimal stand-ins so type hints/imports succeed (not used in this test path)
-class _Base: ...
-class BaseDataModel(_Base): ...
-class Plan(_Base): ...
-class Session(_Base): ...
-class Step(_Base): ...
-class AgentMessage(_Base): ...
+try:  # pragma: no branch - prefer installed SDKs
+    import azure.identity  # type: ignore
+    import azure.identity.aio  # type: ignore
+    import azure.keyvault.secrets.aio  # type: ignore
+    import azure.ai.projects.aio  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - fallback stubs
+    def _ensure_module(name: str):
+        return sys.modules.setdefault(name, types.ModuleType(name))
 
-models_messages_mod.BaseDataModel = BaseDataModel
-models_messages_mod.Plan = Plan
-models_messages_mod.Session = Session
-models_messages_mod.Step = Step
-models_messages_mod.AgentMessage = AgentMessage
-models_mod.messages_kernel = models_messages_mod
-sys.modules.setdefault("models", models_mod)
-sys.modules.setdefault("models.messages_kernel", models_messages_mod)
+    azure_mod = _ensure_module("azure")
+    azure_identity_mod = _ensure_module("azure.identity")
+    azure_identity_aio_mod = _ensure_module("azure.identity.aio")
+
+    class _DummyCredential:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_token(self, *args, **kwargs):
+            class _Token:
+                token = "test-token"
+
+            return _Token()
+
+        async def close(self):
+            return None
+
+    azure_identity_mod.DefaultAzureCredential = _DummyCredential
+    azure_identity_mod.ManagedIdentityCredential = _DummyCredential
+    azure_identity_aio_mod.DefaultAzureCredential = _DummyCredential
+    azure_identity_aio_mod.ManagedIdentityCredential = _DummyCredential
+
+    azure_keyvault_mod = _ensure_module("azure.keyvault")
+    azure_kv_secrets_mod = _ensure_module("azure.keyvault.secrets")
+    azure_kv_secrets_aio_mod = _ensure_module("azure.keyvault.secrets.aio")
+
+    class _DummySecretClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def close(self):
+            return None
+
+    azure_kv_secrets_aio_mod.SecretClient = _DummySecretClient
+
+    azure_ai_mod = _ensure_module("azure.ai")
+    azure_ai_projects_mod = _ensure_module("azure.ai.projects")
+    azure_ai_projects_aio_mod = _ensure_module("azure.ai.projects.aio")
+
+    class _DummyAIProjectClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def close(self):
+            return None
+
+    azure_ai_projects_aio_mod.AIProjectClient = _DummyAIProjectClient
 
 # 4) azure.cosmos.partition_key.PartitionKey (provide if sdk isn't installed)
 try:
@@ -61,6 +96,11 @@ except Exception:  # pragma: no cover
         def __init__(self, path: str): self.path = path
     azure_cosmos_pk_mod.PartitionKey = PartitionKey
     sys.modules.setdefault("azure.cosmos.partition_key", azure_cosmos_pk_mod)
+    azure_cosmos_exc_mod = types.ModuleType("azure.cosmos.exceptions")
+    class CosmosHttpResponseError(Exception):
+        pass
+    azure_cosmos_exc_mod.CosmosHttpResponseError = CosmosHttpResponseError
+    sys.modules.setdefault("azure.cosmos.exceptions", azure_cosmos_exc_mod)
 
 # 5) azure.cosmos.aio.CosmosClient (we’ll patch it in a fixture, but ensure import exists)
 try:
@@ -117,6 +157,20 @@ def fake_cosmos_stack(monkeypatch):
 
     return mock_db, mock_container
 
+
+@pytest.fixture(autouse=True)
+def patch_app_config(monkeypatch):
+    monkeypatch.setenv("COSMOSDB_CONTAINER", "mock-container")
+    monkeypatch.setenv("COSMOSDB_ENDPOINT", "https://mock-endpoint")
+    monkeypatch.setenv("COSMOSDB_DATABASE", "mock-database")
+
+    from src.backend.app_config import AppConfig
+    from src.backend.context import cosmos_memory_kernel
+
+    new_config = AppConfig()
+    monkeypatch.setattr(app_config, "config", new_config)
+    monkeypatch.setattr(cosmos_memory_kernel, "config", new_config)
+
 @pytest.fixture
 def mock_env(monkeypatch):
     # Optional: not strictly needed because we stubbed app_config.config above,
@@ -136,17 +190,25 @@ def mock_env(monkeypatch):
 async def test_initialize(fake_cosmos_stack, mock_env):
     mock_db, mock_container = fake_cosmos_stack
 
+    assert app_config.config.COSMOSDB_CONTAINER == "mock-container"
+    assert app_config.config.COSMOSDB_ENDPOINT == "https://mock-endpoint"
+    assert app_config.config.COSMOSDB_DATABASE == "mock-database"
+
     ctx = CosmosBufferedChatCompletionContext(
         session_id="test_session",
         user_id="test_user",
     )
+    assert ctx._cosmos_container == "mock-container"
+
     await ctx.initialize()
 
     mock_db.create_container_if_not_exists.assert_called_once()
     # Strict arg check:
     args, kwargs = mock_db.create_container_if_not_exists.call_args
-    assert kwargs.get("id") == "mock-container"
-    pk = kwargs.get("partition_key")
+    container_id = kwargs.get("id") if "id" in kwargs else (args[0] if args else None)
+    assert container_id == "mock-container"
+
+    pk = kwargs.get("partition_key") if "partition_key" in kwargs else (args[1] if len(args) > 1 else None)
     assert isinstance(pk, PartitionKey) and getattr(pk, "path", None) == "/session_id"
 
     assert ctx._container == mock_container

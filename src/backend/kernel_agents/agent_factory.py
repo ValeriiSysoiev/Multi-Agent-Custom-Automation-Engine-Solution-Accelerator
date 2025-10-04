@@ -2,6 +2,7 @@
 
 import inspect
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional, Type
 
 # Import the new AppConfig instance
@@ -13,14 +14,29 @@ from kernel_agents.agent_base import BaseAgent
 from kernel_agents.generic_agent import GenericAgent
 from kernel_agents.group_chat_manager import GroupChatManager
 # Import all specialized agent implementations
-from kernel_agents.hr_agent import HrAgent
 from kernel_agents.human_agent import HumanAgent
-from kernel_agents.marketing_agent import MarketingAgent
 from kernel_agents.planner_agent import PlannerAgent  # Add PlannerAgent import
-from kernel_agents.procurement_agent import ProcurementAgent
-from kernel_agents.product_agent import ProductAgent
-from kernel_agents.tech_support_agent import TechSupportAgent
+from kernel_agents.ingestion_agent import IngestionAgent
+from kernel_agents.dedup_agent import DeduplicationAgent
+from kernel_agents.enrichment_agent import EnrichmentAgent
+from kernel_agents.triage_agent import TriageAgent
+from kernel_agents.remediation_agent import RemediationAgent
+from kernel_agents.verification_agent import VerificationAgent
+from kernel_agents.waiver_agent import WaiverAgent
+from kernel_agents.reporting_agent import ReportingAgent
+from kernel_agents.chat_agent import ChatAgent
 from models.messages_kernel import AgentType, PlannerResponsePlan
+from services.chat_access_policy import ChatAccessPolicy
+from services.chat_intent_classifier import ChatIntentClassifier
+from services.chat_service import ChatService
+from repositories.asset_repository import AssetRepository
+from repositories.canonical_finding_repository import CanonicalFindingRepository
+from repositories.remediation_unit_repository import RemediationUnitRepository
+from repositories.enrichment_repository import EnrichmentRepository
+from repositories.run_event_repository import RunEventRepository
+from repositories.ticket_repository import TicketRepository
+from repositories.triage_repository import TriageRepository
+from repositories.waiver_repository import WaiverRepository
 # pylint:disable=E0611
 from semantic_kernel.agents.azure_ai.azure_ai_agent import AzureAIAgent
 
@@ -32,41 +48,53 @@ class AgentFactory:
 
     # Mapping of agent types to their implementation classes
     _agent_classes: Dict[AgentType, Type[BaseAgent]] = {
-        AgentType.HR: HrAgent,
-        AgentType.MARKETING: MarketingAgent,
-        AgentType.PRODUCT: ProductAgent,
-        AgentType.PROCUREMENT: ProcurementAgent,
-        AgentType.TECH_SUPPORT: TechSupportAgent,
         AgentType.GENERIC: GenericAgent,
         AgentType.HUMAN: HumanAgent,
         AgentType.PLANNER: PlannerAgent,
         AgentType.GROUP_CHAT_MANAGER: GroupChatManager,  # Add GroupChatManager
+        AgentType.INGESTION: IngestionAgent,
+        AgentType.DEDUPLICATION: DeduplicationAgent,
+        AgentType.ENRICHMENT: EnrichmentAgent,
+        AgentType.TRIAGE: TriageAgent,
+        AgentType.REMEDIATION: RemediationAgent,
+        AgentType.VERIFICATION: VerificationAgent,
+        AgentType.WAIVER: WaiverAgent,
+        AgentType.REPORTING: ReportingAgent,
+        AgentType.CHAT: ChatAgent,
     }
 
     # Mapping of agent types to their string identifiers (for automatic tool loading)
     _agent_type_strings: Dict[AgentType, str] = {
-        AgentType.HR: AgentType.HR.value,
-        AgentType.MARKETING: AgentType.MARKETING.value,
-        AgentType.PRODUCT: AgentType.PRODUCT.value,
-        AgentType.PROCUREMENT: AgentType.PROCUREMENT.value,
-        AgentType.TECH_SUPPORT: AgentType.TECH_SUPPORT.value,
         AgentType.GENERIC: AgentType.GENERIC.value,
         AgentType.HUMAN: AgentType.HUMAN.value,
         AgentType.PLANNER: AgentType.PLANNER.value,
         AgentType.GROUP_CHAT_MANAGER: AgentType.GROUP_CHAT_MANAGER.value,
+        AgentType.INGESTION: AgentType.INGESTION.value,
+        AgentType.DEDUPLICATION: AgentType.DEDUPLICATION.value,
+        AgentType.ENRICHMENT: AgentType.ENRICHMENT.value,
+        AgentType.TRIAGE: AgentType.TRIAGE.value,
+        AgentType.REMEDIATION: AgentType.REMEDIATION.value,
+        AgentType.VERIFICATION: AgentType.VERIFICATION.value,
+        AgentType.WAIVER: AgentType.WAIVER.value,
+        AgentType.REPORTING: AgentType.REPORTING.value,
+        AgentType.CHAT: AgentType.CHAT.value,
     }
 
     # System messages for each agent type
     _agent_system_messages: Dict[AgentType, str] = {
-        AgentType.HR: HrAgent.default_system_message(),
-        AgentType.MARKETING: MarketingAgent.default_system_message(),
-        AgentType.PRODUCT: ProductAgent.default_system_message(),
-        AgentType.PROCUREMENT: ProcurementAgent.default_system_message(),
-        AgentType.TECH_SUPPORT: TechSupportAgent.default_system_message(),
         AgentType.GENERIC: GenericAgent.default_system_message(),
         AgentType.HUMAN: HumanAgent.default_system_message(),
         AgentType.PLANNER: PlannerAgent.default_system_message(),
         AgentType.GROUP_CHAT_MANAGER: GroupChatManager.default_system_message(),
+        AgentType.INGESTION: IngestionAgent.default_system_message(),
+        AgentType.DEDUPLICATION: DeduplicationAgent.default_system_message(),
+        AgentType.ENRICHMENT: EnrichmentAgent.default_system_message(),
+        AgentType.TRIAGE: TriageAgent.default_system_message(),
+        AgentType.REMEDIATION: RemediationAgent.default_system_message(),
+        AgentType.VERIFICATION: VerificationAgent.default_system_message(),
+        AgentType.WAIVER: WaiverAgent.default_system_message(),
+        AgentType.REPORTING: ReportingAgent.default_system_message(),
+        AgentType.CHAT: ChatAgent.default_system_message(),
     }
 
     # Cache of agent instances by session_id and agent_type
@@ -74,6 +102,8 @@ class AgentFactory:
 
     # Cache of Azure AI Agent instances
     _azure_ai_agent_cache: Dict[str, Dict[str, AzureAIAgent]] = {}
+    _chat_service: Optional[ChatService] = None
+    _chat_policy: Optional[ChatAccessPolicy] = None
 
     @classmethod
     async def create_agent(
@@ -150,6 +180,9 @@ class AgentFactory:
 
         # Create the agent instance using the project-based pattern
         try:
+            if agent_type == AgentType.CHAT and "chat_service" not in kwargs:
+                kwargs["chat_service"] = cls._get_chat_service()
+
             # Filter kwargs to only those accepted by the agent's __init__
             agent_init_params = inspect.signature(agent_class.__init__).parameters
             valid_keys = set(agent_init_params.keys()) - {"self"}
@@ -308,6 +341,35 @@ class AgentFactory:
         if not agent_class:
             raise ValueError(f"Unknown agent type: {agent_type}")
         return agent_class
+
+    @classmethod
+    def get_chat_service(cls) -> ChatService:
+        """Return the shared ChatService instance."""
+
+        return cls._get_chat_service()
+
+    @classmethod
+    def _get_chat_service(cls) -> ChatService:
+        if cls._chat_service is None:
+            if cls._chat_policy is None:
+                config_path = Path(__file__).resolve().parents[1] / "config" / "chat_scope_mapping.json"
+                if config_path.exists():
+                    cls._chat_policy = ChatAccessPolicy.from_config_file(config_path)
+                else:
+                    cls._chat_policy = ChatAccessPolicy()
+            cls._chat_service = ChatService(
+                asset_repo=AssetRepository(),
+                canonical_repo=CanonicalFindingRepository(),
+                triage_repo=TriageRepository(),
+                remediation_repo=RemediationUnitRepository(),
+                ticket_repo=TicketRepository(),
+                waiver_repo=WaiverRepository(),
+                run_event_repo=RunEventRepository(),
+                enrichment_repo=EnrichmentRepository(),
+                intent_classifier=ChatIntentClassifier(),
+                access_policy=cls._chat_policy,
+            )
+        return cls._chat_service
 
     @classmethod
     def clear_cache(cls, session_id: Optional[str] = None) -> None:

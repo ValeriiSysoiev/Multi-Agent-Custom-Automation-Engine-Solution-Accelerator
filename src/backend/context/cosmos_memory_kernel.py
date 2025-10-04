@@ -17,7 +17,24 @@ from semantic_kernel.contents import ChatMessageContent, ChatHistory, AuthorRole
 
 # Import the AppConfig instance
 from app_config import config
-from models.messages_kernel import BaseDataModel, Plan, Session, Step, AgentMessage
+from models.messages_kernel import (
+    AgentMessage,
+    AssetRecord,
+    BaseDataModel,
+    CanonicalFinding,
+    EnrichmentRecord,
+    EvidenceRecord,
+    Plan,
+    RemediationUnitRecord,
+    RunEventRecord,
+    Session,
+    Step,
+    SyncStateRecord,
+    TicketRecord,
+    TriageRecord,
+    WaiverRecord,
+    RawFinding,
+)
 
 
 # Add custom JSON encoder class for datetime objects
@@ -38,6 +55,17 @@ class CosmosMemoryContext(MemoryStoreBase):
         "plan": Plan,
         "step": Step,
         "agent_message": AgentMessage,
+        "finding_raw": RawFinding,
+        "sync_state": SyncStateRecord,
+        "finding_canonical": CanonicalFinding,
+        "enrichment": EnrichmentRecord,
+        "triage": TriageRecord,
+        "remediation_unit": RemediationUnitRecord,
+        "ticket": TicketRecord,
+        "evidence": EvidenceRecord,
+        "asset": AssetRecord,
+        "run_event": RunEventRecord,
+        "waiver": WaiverRecord,
         # Messages are handled separately
     }
 
@@ -72,9 +100,10 @@ class CosmosMemoryContext(MemoryStoreBase):
         try:
             if not self._database:
                 # Create Cosmos client
-                cosmos_client = CosmosClient(
-                    self._cosmos_endpoint, credential=get_azure_credential(config.AZURE_CLIENT_ID)
+                credential = get_azure_credential(
+                    config.AZURE_MANAGED_IDENTITY_CLIENT_ID or config.AZURE_CLIENT_ID
                 )
+                cosmos_client = CosmosClient(self._cosmos_endpoint, credential=credential)
                 self._database = cosmos_client.get_database_client(
                     self._cosmos_database
                 )
@@ -114,18 +143,27 @@ class CosmosMemoryContext(MemoryStoreBase):
                     "CosmosDB container is not available. Initialization failed."
                 )
 
+    @classmethod
+    def _sanitize_for_cosmos(cls, value: Any) -> Any:
+        """Recursively convert datetime objects so Cosmos can accept the payload."""
+        if isinstance(value, datetime.datetime):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=datetime.timezone.utc)
+            return value.isoformat()
+        if isinstance(value, list):
+            return [cls._sanitize_for_cosmos(item) for item in value]
+        if isinstance(value, dict):
+            return {key: cls._sanitize_for_cosmos(item) for key, item in value.items()}
+        return value
+
     async def add_item(self, item: BaseDataModel) -> None:
         """Add a data model item to Cosmos DB."""
         await self.ensure_initialized()
 
         try:
-            # Convert the model to a dict
+            # Convert the model to a dict and sanitize datetimes recursively
             document = item.model_dump()
-
-            # Handle datetime objects by converting them to ISO format strings
-            for key, value in list(document.items()):
-                if isinstance(value, datetime.datetime):
-                    document[key] = value.isoformat()
+            document = self._sanitize_for_cosmos(document)
 
             # Now create the item with the serialized datetime values
             await self._container.create_item(body=document)
@@ -139,13 +177,9 @@ class CosmosMemoryContext(MemoryStoreBase):
         await self.ensure_initialized()
 
         try:
-            # Convert the model to a dict
+            # Convert the model to a dict and sanitize datetimes recursively
             document = item.model_dump()
-
-            # Handle datetime objects by converting them to ISO format strings
-            for key, value in list(document.items()):
-                if isinstance(value, datetime.datetime):
-                    document[key] = value.isoformat()
+            document = self._sanitize_for_cosmos(document)
 
             # Now upsert the item with the serialized datetime values
             await self._container.upsert_item(body=document)
@@ -683,7 +717,8 @@ class CosmosMemoryContext(MemoryStoreBase):
             if "id" not in record:
                 record["id"] = str(uuid.uuid4())
 
-            await self._container.upsert_item(body=record)
+            sanitized = self._sanitize_for_cosmos(record)
+            await self._container.upsert_item(body=sanitized)
             return record["id"]
         except Exception as e:
             logging.exception(f"Failed to upsert item to Cosmos DB: {e}")

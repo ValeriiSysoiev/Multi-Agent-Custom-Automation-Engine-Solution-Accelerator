@@ -8,7 +8,7 @@ from kernel_agents.agent_base import BaseAgent
 from utils_date import format_date_for_user
 from models.messages_kernel import (ActionRequest, AgentMessage, AgentType,
                                     HumanFeedback, HumanFeedbackStatus, InputTask,
-                                    Plan, Step, StepStatus)
+                                    Plan, PlanStatus, Step, StepStatus)
 # pylint: disable=E0611
 from semantic_kernel.functions.kernel_function import KernelFunction
 
@@ -67,12 +67,16 @@ class GroupChatManager(BaseAgent):
         # Store additional GroupChatManager-specific attributes
         self._available_agents = [
             AgentType.HUMAN.value,
-            AgentType.HR.value,
-            AgentType.MARKETING.value,
-            AgentType.PRODUCT.value,
-            AgentType.PROCUREMENT.value,
-            AgentType.TECH_SUPPORT.value,
             AgentType.GENERIC.value,
+            AgentType.INGESTION.value,
+            AgentType.DEDUPLICATION.value,
+            AgentType.ENRICHMENT.value,
+            AgentType.TRIAGE.value,
+            AgentType.REMEDIATION.value,
+            AgentType.VERIFICATION.value,
+            AgentType.WAIVER.value,
+            AgentType.REPORTING.value,
+            AgentType.CHAT.value,
         ]
         self._agent_tools_list = agent_tools_list or []
         self._agent_instances = agent_instances or {}
@@ -251,51 +255,15 @@ class GroupChatManager(BaseAgent):
         if message.step_id:
             step = next((s for s in steps if s.id == message.step_id), None)
             if step:
-                await self._update_step_status(
-                    step, message.approved, received_human_feedback
+                await self._process_feedback_for_step(
+                    message, step, received_human_feedback
                 )
-                if message.approved:
-                    await self._execute_step(message.session_id, step)
-                else:
-                    # Notify the GroupChatManager that the step has been rejected
-                    # TODO: Implement this logic later
-                    step.status = StepStatus.rejected
-                    step.human_approval_status = HumanFeedbackStatus.rejected
-                    self._memory_store.update_step(step)
-                    track_event_if_configured(
-                        "Group Chat Manager - Steps has been rejected and updated into the cosmos",
-                        {
-                            "status": StepStatus.rejected,
-                            "session_id": message.session_id,
-                            "user_id": self._user_id,
-                            "human_approval_status": HumanFeedbackStatus.rejected,
-                            "source": step.agent,
-                        },
-                    )
         else:
             # Update and execute all steps if no specific step_id is provided
             for step in steps:
-                await self._update_step_status(
-                    step, message.approved, received_human_feedback
+                await self._process_feedback_for_step(
+                    message, step, received_human_feedback
                 )
-                if message.approved:
-                    await self._execute_step(message.session_id, step)
-                else:
-                    # Notify the GroupChatManager that the step has been rejected
-                    # TODO: Implement this logic later
-                    step.status = StepStatus.rejected
-                    step.human_approval_status = HumanFeedbackStatus.rejected
-                    self._memory_store.update_step(step)
-                    track_event_if_configured(
-                        f"{AgentType.GROUP_CHAT_MANAGER.value} - Step has been rejected and updated into the cosmos",
-                        {
-                            "status": StepStatus.rejected,
-                            "session_id": message.session_id,
-                            "user_id": self._user_id,
-                            "human_approval_status": HumanFeedbackStatus.rejected,
-                            "source": step.agent,
-                        },
-                    )
 
     # Function to update step status and add feedback
     async def _update_step_status(
@@ -308,13 +276,12 @@ class GroupChatManager(BaseAgent):
             step.status = StepStatus.rejected
             step.human_approval_status = HumanFeedbackStatus.rejected
 
-        step.human_feedback = received_human_feedback
-        step.status = StepStatus.completed
+        step.human_feedback = received_human_feedback.strip() if received_human_feedback else None
         await self._memory_store.update_step(step)
         track_event_if_configured(
             f"{AgentType.GROUP_CHAT_MANAGER.value} - Received human feedback, Updating step and updated into the cosmos",
             {
-                "status": StepStatus.completed,
+                "status": step.status,
                 "session_id": step.session_id,
                 "user_id": self._user_id,
                 "human_feedback": received_human_feedback,
@@ -329,13 +296,16 @@ class GroupChatManager(BaseAgent):
         # Update step status to 'action_requested'
         step.status = StepStatus.action_requested
         await self._memory_store.update_step(step)
+        agent_label = (
+            step.agent.value if isinstance(step.agent, AgentType) else str(step.agent)
+        )
         track_event_if_configured(
             f"{AgentType.GROUP_CHAT_MANAGER.value} - Update step to action_requested and updated into the cosmos",
             {
                 "status": StepStatus.action_requested,
                 "session_id": step.session_id,
                 "user_id": self._user_id,
-                "source": step.agent,
+                "source": agent_label,
             },
         )
 
@@ -359,12 +329,17 @@ class GroupChatManager(BaseAgent):
         )
 
         # Iterate over the steps until the current_step_id
-        for i, step in enumerate(steps):
-            if step.id == current_step_id:
+        for i, historic_step in enumerate(steps):
+            if historic_step.id == current_step_id:
                 break
             formatted_string += f"Step {i}\n"
             formatted_string += f"{AgentType.GROUP_CHAT_MANAGER.value}: {step.action}\n"
-            formatted_string += f"{step.agent.value}: {step.agent_reply}\n"
+            historic_agent = (
+                historic_step.agent.value
+                if isinstance(historic_step.agent, AgentType)
+                else str(historic_step.agent)
+            )
+            formatted_string += f"{historic_agent}: {historic_step.agent_reply}\n"
         formatted_string += "<conversation_history \\>"
 
         logging.info(f"Formatted string: {formatted_string}")
@@ -379,11 +354,10 @@ class GroupChatManager(BaseAgent):
             action=action_with_history,
             agent=step.agent,
         )
-        logging.info(f"Sending ActionRequest to {step.agent.value}")
+        logging.info(f"Sending ActionRequest to {agent_label}")
 
-        if step.agent != "":
-            agent_name = step.agent.value
-            formatted_agent = agent_name.replace("_", " ")
+        if agent_label:
+            formatted_agent = agent_label.replace("_", " ")
         else:
             raise ValueError(f"Check {step.agent} is missing")
 
@@ -410,7 +384,7 @@ class GroupChatManager(BaseAgent):
             },
         )
 
-        if step.agent == AgentType.HUMAN.value:
+        if agent_label == AgentType.HUMAN.value:
             # we mark the step as complete since we have received the human feedback
             # Update step status to 'completed'
             step.status = StepStatus.completed
@@ -431,8 +405,157 @@ class GroupChatManager(BaseAgent):
             )
         else:
             # Use the agent from the step to determine which agent to send to
-            agent = self._agent_instances[step.agent.value]
+            agent = self._agent_instances[agent_label]
             await agent.handle_action_request(
                 action_request
             )  # this function is in base_agent.py
-            logging.info(f"Sent ActionRequest to {step.agent.value}")
+            logging.info(f"Sent ActionRequest to {agent_label}")
+
+    async def _process_feedback_for_step(
+        self, feedback: HumanFeedback, step: Step, received_human_feedback: str
+    ) -> None:
+        if feedback.approved:
+            await self._update_step_status(step, True, received_human_feedback)
+            await self._execute_step(feedback.session_id, step)
+            return
+
+        await self._handle_rejected_step(step, feedback, received_human_feedback)
+
+    async def _handle_rejected_step(
+        self, step: Step, feedback: HumanFeedback, received_human_feedback: str
+    ) -> None:
+        reason = feedback.human_feedback or "Step rejected without additional feedback."
+        combined_feedback = received_human_feedback.strip() if received_human_feedback else reason
+
+        step.human_feedback = combined_feedback
+        step.human_approval_status = HumanFeedbackStatus.rejected
+
+        if feedback.updated_action:
+            step.updated_action = feedback.updated_action
+            step.action = feedback.updated_action
+            step.status = StepStatus.planned
+            step.human_approval_status = HumanFeedbackStatus.requested
+            await self._memory_store.update_step(step)
+
+            agent_label = (
+                step.agent.value if isinstance(step.agent, AgentType) else str(step.agent)
+            )
+
+            await self._memory_store.add_item(
+                AgentMessage(
+                    session_id=feedback.session_id,
+                    user_id=self._user_id,
+                    plan_id=step.plan_id,
+                    content=(
+                        f"Human reviewer supplied an updated action for {agent_label}:"
+                        f" {feedback.updated_action}"
+                    ),
+                    source=AgentType.GROUP_CHAT_MANAGER.value,
+                    step_id=step.id,
+                )
+            )
+
+            track_event_if_configured(
+                f"{AgentType.GROUP_CHAT_MANAGER.value} - Step updated with human-provided action",
+                {
+                    "session_id": feedback.session_id,
+                    "user_id": self._user_id,
+                    "plan_id": step.plan_id,
+                    "step_id": step.id,
+                    "source": agent_label,
+                },
+            )
+
+            await self._execute_step(feedback.session_id, step)
+            return
+
+        step.status = StepStatus.rejected
+        await self._memory_store.update_step(step)
+
+        agent_label = (
+            step.agent.value if isinstance(step.agent, AgentType) else str(step.agent)
+        )
+
+        await self._memory_store.add_item(
+            AgentMessage(
+                session_id=feedback.session_id,
+                user_id=self._user_id,
+                plan_id=step.plan_id,
+                content=(
+                    f"Step for {agent_label} rejected by human reviewer."
+                    f" Feedback: {reason}"
+                ),
+                source=AgentType.GROUP_CHAT_MANAGER.value,
+                step_id=step.id,
+            )
+        )
+
+        track_event_if_configured(
+            f"{AgentType.GROUP_CHAT_MANAGER.value} - Step rejected",
+            {
+                "session_id": feedback.session_id,
+                "user_id": self._user_id,
+                "plan_id": step.plan_id,
+                "step_id": step.id,
+                "source": agent_label,
+            },
+        )
+
+        plan: Optional[Plan] = await self._memory_store.get_plan_by_session(
+            feedback.session_id
+        )
+        if plan:
+            await self._memory_store.add_item(
+                AgentMessage(
+                    session_id=feedback.session_id,
+                    user_id=self._user_id,
+                    plan_id=plan.id,
+                    content=(
+                        "Planner review required: the previous step was rejected by the"
+                        " human reviewer. Provide an updated set of actions before the"
+                        " workflow continues."
+                    ),
+                    source=AgentType.GROUP_CHAT_MANAGER.value,
+                    step_id="",
+                )
+            )
+            await self._trigger_replan(plan, step, reason, feedback)
+
+    async def _trigger_replan(
+        self, plan: Plan, rejected_step: Step, reason: str, feedback: HumanFeedback
+    ) -> None:
+        planner_agent = self._agent_instances.get(AgentType.PLANNER.value)
+        if planner_agent is None:
+            logging.warning("Planner agent not available to handle rejection reroute")
+            return
+
+        try:
+            plan.overall_status = PlanStatus.in_progress
+            await self._memory_store.update_plan(plan)
+
+            replan_task = InputTask(
+                session_id=feedback.session_id,
+                description=plan.initial_goal or plan.summary or "Replan task",
+                metadata={
+                    "replan_of": plan.id,
+                    "rejected_step_id": rejected_step.id,
+                    "rejection_reason": reason,
+                },
+            )
+
+            await planner_agent.handle_input_task(replan_task)
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logging.exception("Failed to trigger planner replan after rejection: %s", exc)
+            await self._memory_store.add_item(
+                AgentMessage(
+                    session_id=feedback.session_id,
+                    user_id=self._user_id,
+                    plan_id=plan.id,
+                    content=(
+                        "Planner replan attempt failed after rejection; see logs for"
+                        " details. Manual intervention may be required."
+                    ),
+                    source=AgentType.GROUP_CHAT_MANAGER.value,
+                    step_id="",
+                )
+            )

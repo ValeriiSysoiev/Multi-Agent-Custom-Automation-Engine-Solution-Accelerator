@@ -20,6 +20,7 @@ param solutionUniqueText string = take(uniqueString(subscription().id, resourceG
 @description('Required. Azure region for all services. Regions are restricted to guarantee compatibility with paired regions and replica locations for data redundancy and failover scenarios based on articles [Azure regions list](https://learn.microsoft.com/azure/reliability/regions-list) and [Azure Database for MySQL Flexible Server - Azure Regions](https://learn.microsoft.com/azure/mysql/flexible-server/overview#azure-regions).')
 @allowed([
   'australiaeast'
+  'canadacentral'
   'centralus'
   'eastasia'
   'eastus2'
@@ -131,6 +132,7 @@ var solutionSuffix = toLower(trim(replace(
 // Region pairs list based on article in [Azure Database for MySQL Flexible Server - Azure Regions](https://learn.microsoft.com/azure/mysql/flexible-server/overview#azure-regions) for supported high availability regions for CosmosDB.
 var cosmosDbZoneRedundantHaRegionPairs = {
   australiaeast: 'uksouth'
+  canadacentral: 'canadaeast'
   centralus: 'eastus2'
   eastasia: 'southeastasia'
   eastus: 'centralus'
@@ -147,6 +149,7 @@ var cosmosDbHaLocation = cosmosDbZoneRedundantHaRegionPairs[location]
 // Replica regions list based on article in [Azure regions list](https://learn.microsoft.com/azure/reliability/regions-list) and [Enhance resilience by replicating your Log Analytics workspace across regions](https://learn.microsoft.com/azure/azure-monitor/logs/workspace-replication#supported-regions) for supported regions for Log Analytics Workspace.
 var replicaRegionPairs = {
   australiaeast: 'australiasoutheast'
+  canadacentral: 'canadaeast'
   centralus: 'westus'
   eastasia: 'japaneast'
   eastus: 'centralus'

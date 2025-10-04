@@ -111,7 +111,7 @@ const PlanChat: React.FC<PlanChatProps> = ({
                       remarkPlugins={[remarkGfm]}
                       rehypePlugins={[rehypePrism]}
                     >
-                      {TaskService.cleanHRAgent(msg.content) || ""}
+                      {TaskService.cleanAgentContent(msg.content) || ""}
                     </ReactMarkdown>
 
                     {!isHuman && (

@@ -1,0 +1,314 @@
+# Microsoft Defender for Cloud - Field Mapping Specification
+# This YAML provides exact field mappings for Codex implementation
+
+api_info:
+  service: "Microsoft Defender for Cloud"
+  provider: "Microsoft.Security"
+  primary_api_version: "2019-01-01-preview"
+  alternate_versions:
+    - "2022-01-01-preview"
+    - "2023-01-01-preview"
+
+endpoints:
+  assessments:
+    url_pattern: "https://management.azure.com/subscriptions/{subscriptionId}/providers/Microsoft.Security/assessments"
+    parameters:
+      - name: "api-version"
+        required: true
+        default: "2019-01-01-preview"
+      - name: "$filter"
+        required: false
+        description: "OData filter expression"
+      - name: "$top"
+        required: false
+        description: "Maximum number of results"
+
+  subassessments:
+    url_pattern: "https://management.azure.com/subscriptions/{subscriptionId}/providers/Microsoft.Security/assessments/{assessmentName}/subAssessments"
+    parameters:
+      - name: "api-version"
+        required: true
+        default: "2019-01-01-preview"
+
+field_mappings:
+  # Core identification fields
+  vuln_key:
+    primary_source: "properties.additionalData.cve[0]"
+    fallback_sources:
+      - "properties.additionalData.vendorReference"
+      - "properties.id"
+      - "name"
+    type: "string"
+    required: true
+    description: "Primary vulnerability identifier"
+
+  scanner_source:
+    value: "defender_mdc"
+    type: "string"
+    constant: true
+    description: "Always set to 'defender_mdc' for MDC findings"
+
+  # Asset identification
+  asset_identifiers:
+    type: "object"
+    fields:
+      resourceId:
+        source: "properties.resourceDetails.id"
+        type: "string"
+        nullable: true
+        description: "Azure Resource Manager resource ID"
+
+      subscriptionId:
+        source: "extract_from_resource_id"
+        pattern: "/subscriptions/([^/]+)/"
+        type: "string"
+        description: "Azure subscription GUID"
+
+      resourceGroup:
+        source: "extract_from_resource_id"
+        pattern: "/resourceGroups/([^/]+)/"
+        type: "string"
+        description: "Resource group name"
+
+      resourceName:
+        source: "extract_from_resource_id"
+        pattern: "providers/[^/]+/[^/]+/([^/]+)"
+        type: "string"
+        description: "Resource name"
+
+  # CVE and vulnerability data
+  cve:
+    source: "properties.additionalData.cve"
+    type: "array[string]"
+    default: []
+    description: "List of CVE identifiers"
+
+  severity:
+    primary_source: "properties.additionalData.severity"
+    fallback_sources:
+      - "properties.status.severity"
+    type: "string"
+    enum: ["Critical", "High", "Medium", "Low", "Informational"]
+    mapping:
+      "Critical": "critical"
+      "High": "high"
+      "Medium": "medium"
+      "Low": "low"
+      "Informational": "info"
+    description: "Normalized severity level"
+
+  cvss:
+    type: "object"
+    condition: "properties.additionalData.cvss != null"
+    fields:
+      baseScore:
+        source: "properties.additionalData.cvss"
+        type: "number"
+        range: [0.0, 10.0]
+        description: "CVSS base score"
+
+      vector:
+        source: "properties.additionalData.cvss3.vector"
+        type: "string"
+        optional: true
+        description: "CVSS v3 vector string"
+
+  # Temporal fields
+  first_seen:
+    primary_source: "properties.additionalData.firstDetected"
+    fallback_sources:
+      - "properties.timeGenerated"
+    type: "datetime"
+    format: "ISO8601"
+    description: "First detection timestamp"
+
+  last_seen:
+    primary_source: "properties.additionalData.lastSeen"
+    fallback_sources:
+      - "properties.timeGenerated"
+    type: "datetime"
+    format: "ISO8601"
+    description: "Last observation timestamp"
+
+  # Status mapping
+  status:
+    source: "properties.status.code"
+    type: "string"
+    mapping:
+      "Unhealthy": "open"
+      "Healthy": "fixed"
+      "NotApplicable": "not_applicable"
+    default: "open"
+    description: "Vulnerability status"
+
+  # Location and context
+  location:
+    type: "object"
+    fields:
+      port:
+        source: "properties.additionalData.port"
+        type: "number"
+        optional: true
+        description: "Network port number"
+
+      protocol:
+        source: "properties.additionalData.protocol"
+        type: "string"
+        optional: true
+        enum: ["tcp", "udp", "icmp"]
+        description: "Network protocol"
+
+      softwareName:
+        source: "properties.additionalData.softwareName"
+        type: "string"
+        optional: true
+        description: "Affected software name"
+
+      version:
+        source: "properties.additionalData.version"
+        type: "string"
+        optional: true
+        description: "Affected software version"
+
+      path:
+        source: "properties.additionalData.filePath"
+        type: "string"
+        optional: true
+        description: "File system path if applicable"
+
+  # Remediation information
+  patch_available:
+    source: "properties.additionalData.patchable"
+    type: "boolean"
+    default: false
+    transform: "bool(value)"
+    description: "Whether a patch is available"
+
+  solution:
+    source: "properties.remediation.description"
+    type: "string"
+    nullable: true
+    description: "Remediation instructions"
+
+  evidence:
+    source: "properties.additionalData.evidence"
+    type: "string"
+    nullable: true
+    description: "Detection evidence or proof"
+
+  # Additional metadata
+  additional_info:
+    type: "object"
+    fields:
+      vendorReference:
+        source: "properties.additionalData.vendorReference"
+        type: "string"
+        optional: true
+        description: "Vendor advisory ID"
+
+      exploitAvailable:
+        source: "properties.additionalData.exploitAvailable"
+        type: "boolean"
+        optional: true
+        description: "Known exploit exists"
+
+      exploitTypes:
+        source: "properties.additionalData.exploitTypes"
+        type: "array[string]"
+        optional: true
+        description: "Types of known exploits"
+
+      category:
+        source: "properties.category"
+        type: "string"
+        optional: true
+        description: "Vulnerability category"
+
+      impact:
+        source: "properties.impact"
+        type: "string"
+        optional: true
+        description: "Impact description"
+
+  # Raw data preservation
+  raw:
+    source: "entire_record"
+    type: "object"
+    description: "Complete original MDC response for reference"
+
+# Processing rules and transformations
+transformations:
+  extract_from_resource_id:
+    description: "Extract components from Azure Resource ID"
+    example_input: "/subscriptions/12345/resourceGroups/myRG/providers/Microsoft.Compute/virtualMachines/myVM"
+    patterns:
+      subscription: "(?:/subscriptions/([^/]+))?"
+      resource_group: "(?:/resourceGroups/([^/]+))?"
+      provider: "(?:/providers/([^/]+))?"
+      resource_type: "(?:/providers/[^/]+/([^/]+))?"
+      resource_name: "(?:/providers/[^/]+/[^/]+/([^/]+))?"
+
+  normalize_severity:
+    input_values: ["Critical", "High", "Medium", "Low", "Informational", "None"]
+    output_mapping:
+      "Critical": "critical"
+      "High": "high"
+      "Medium": "medium"
+      "Low": "low"
+      "Informational": "info"
+      "None": "info"
+    default: "medium"
+
+  status_determination:
+    rules:
+      - if: "properties.status.code == 'Unhealthy'"
+        then: "open"
+      - if: "properties.status.code == 'Healthy'"
+        then: "fixed"
+      - if: "properties.status.code == 'NotApplicable'"
+        then: "not_applicable"
+      - default: "open"
+
+# Special handling instructions
+special_cases:
+  empty_subassessments:
+    description: "Many assessments have no subassessments"
+    handling: "Skip silently, this is normal for policy-based findings"
+
+  missing_cve:
+    description: "Not all findings have CVE identifiers"
+    handling: "Use vendorReference or assessment ID as vuln_key"
+
+  network_findings:
+    description: "Network-based findings include port/protocol"
+    handling: "Only populate location.port and location.protocol when present"
+
+  container_findings:
+    description: "Container image vulnerabilities have special fields"
+    handling: "Check for properties.additionalData.imageDigest and properties.additionalData.registry"
+
+# Error handling
+error_handling:
+  api_version_not_supported:
+    retry_with: ["2019-01-01-preview", "2022-01-01-preview", "2023-01-01-preview"]
+    max_retries: 3
+
+  rate_limit_exceeded:
+    wait_seconds: 60
+    backoff_multiplier: 2
+    max_wait: 300
+
+  resource_not_found:
+    action: "log_and_continue"
+    severity: "warning"
+
+# Performance optimization
+performance:
+  batch_size: 50
+  concurrent_requests: 10
+  cache_duration_seconds:
+    assessments: 3600  # 1 hour
+    subassessments: 900  # 15 minutes
+  pagination:
+    page_size: 100
+    max_pages: 100

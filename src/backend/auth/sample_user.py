@@ -28,7 +28,7 @@ sample_user = {
     "X-Forwarded-For": "22.222.222.22:64379",
     "X-Forwarded-Proto": "https",
     "X-Forwarded-Tlsversion": "1.2",
-    "X-Ms-Client-Principal": "your_base_64_encoded_token",
+    "X-Ms-Client-Principal": "eyJ1c2VyUm9sZXMiOiBbIkRldkFkbWluIl0sICJjbGFpbXMiOiBbeyJ0eXAiOiAiYXBwIiwgInZhbCI6ICJDdXN0b21lciBXZWIifSwgeyJ0eXAiOiAiZ3JvdXBzIiwgInZhbCI6ICJQbGF0Zm9ybSBPcGVyYXRpb25zIn1dfQ==",
     "X-Ms-Client-Principal-Id": "00000000-0000-0000-0000-000000000000",
     "X-Ms-Client-Principal-Idp": "aad",
     "X-Ms-Client-Principal-Name": "testusername@constoso.com",

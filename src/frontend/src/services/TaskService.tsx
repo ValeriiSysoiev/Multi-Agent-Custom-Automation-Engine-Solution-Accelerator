@@ -145,27 +145,27 @@ export class TaskService {
    */
   static cleanTextToSpaces(text: string): string {
     if (!text) return "";
-    // Replace any non-alphanumeric character with a space
     let cleanedText = text
-      .replace("Hr_Agent", "HR_Agent")
-      .trim()
-      .replace(/[^a-zA-Z0-9]/g, " ");
-
-    // Clean up multiple spaces and trim
-    cleanedText = cleanedText.replace(/\s+/g, " ").trim();
-
+      .replace(/_Agent/gi, ' Agent')
+      .replace(/_/g, ' ')
+      .replace(/[^a-zA-Z0-9 ]/g, ' ');
+    cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
     return cleanedText;
   }
 
-  static cleanHRAgent(text: string): string {
-    if (!text) return "";
-    // Replace any non-alphanumeric character with a space
-    let cleanedText = text
-      .replace("Hr_Agent", "HR Agent")
-      .replace("Hr Agent", "HR Agent")
-      .trim();
-
-    return cleanedText;
+  static cleanAgentContent(text: string): string {
+    if (!text) return '';
+    return text
+      .replace(/Hr_Agent/gi, 'HR Agent')
+      .replace(/Deduplication_Agent/gi, 'Deduplication Agent')
+      .replace(/Enrichment_Agent/gi, 'Enrichment Agent')
+      .replace(/Triage_Agent/gi, 'Triage Agent')
+      .replace(/Remediation_Agent/gi, 'Remediation Agent')
+      .replace(/Verification_Agent/gi, 'Verification Agent')
+      .replace(/Waiver_Agent/gi, 'Waiver Agent')
+      .replace(/Reporting_Agent/gi, 'Reporting Agent')
+      .replace(/Ingestion_Agent/gi, 'Ingestion Agent')
+      .replace(/Chat_Agent/gi, 'Chat Agent');
   }
   /**
    * Submit an input task to create a new plan

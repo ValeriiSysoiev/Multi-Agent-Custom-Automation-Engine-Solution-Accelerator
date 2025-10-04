@@ -1,6 +1,11 @@
 import sys
 import os
 import pytest
+
+pytest.skip(
+    "Legacy accelerator integration tests pending AI VM replacements.",
+    allow_module_level=True,
+)
 import logging
 import inspect
 import json

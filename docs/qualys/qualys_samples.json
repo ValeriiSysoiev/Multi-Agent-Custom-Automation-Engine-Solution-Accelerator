@@ -1,0 +1,245 @@
+{
+  "api_samples": {
+    "authentication": {
+      "description": "HTTP Basic Authentication",
+      "request_headers": {
+        "Authorization": "Basic ZGV0dGUzdnM0OkdvYmxpbkA4NQ==",
+        "X-Requested-With": "Curl",
+        "Accept": "application/xml"
+      },
+      "notes": "Base64 encode username:password for Authorization header"
+    },
+
+    "request_examples": {
+      "get_detections": {
+        "description": "Fetch VM detections for last 30 days",
+        "method": "GET",
+        "url": "https://qualysapi.qg3.apps.qualys.com/api/2.0/fo/asset/host/vm/detection/?action=list&vm_scan_since=2025-08-20&truncation_limit=1000",
+        "headers": {
+          "Authorization": "Basic {base64_credentials}",
+          "X-Requested-With": "Curl",
+          "Accept": "application/xml"
+        }
+      },
+
+      "get_knowledge_base": {
+        "description": "Fetch vulnerability knowledge base",
+        "method": "GET",
+        "url": "https://qualysapi.qg3.apps.qualys.com/api/2.0/fo/knowledge_base/vuln/?action=list&details=Basic&ids=90007,90044,92305",
+        "headers": {
+          "Authorization": "Basic {base64_credentials}",
+          "X-Requested-With": "Curl"
+        }
+      },
+
+      "get_specific_host": {
+        "description": "Get detections for specific IP",
+        "method": "GET",
+        "url": "https://qualysapi.qg3.apps.qualys.com/api/2.0/fo/asset/host/vm/detection/?action=list&ips=10.0.32.6",
+        "headers": {
+          "Authorization": "Basic {base64_credentials}",
+          "X-Requested-With": "Curl"
+        }
+      }
+    },
+
+    "raw_xml_samples": {
+      "detection_without_cve": {
+        "description": "Windows configuration finding without CVE",
+        "xml": "<DETECTION>\n  <UNIQUE_VULN_ID>6272615222</UNIQUE_VULN_ID>\n  <QID>90007</QID>\n  <TYPE>Confirmed</TYPE>\n  <SEVERITY>2</SEVERITY>\n  <SSL>0</SSL>\n  <RESULTS><![CDATA[HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon cachedlogonscount = 10]]></RESULTS>\n  <STATUS>Active</STATUS>\n  <FIRST_FOUND_DATETIME>2025-08-26T21:24:10Z</FIRST_FOUND_DATETIME>\n  <LAST_FOUND_DATETIME>2025-09-19T17:34:39Z</LAST_FOUND_DATETIME>\n  <TIMES_FOUND>13</TIMES_FOUND>\n  <LAST_TEST_DATETIME>2025-09-19T17:34:39Z</LAST_TEST_DATETIME>\n  <LAST_UPDATE_DATETIME>2025-09-19T17:34:39Z</LAST_UPDATE_DATETIME>\n  <IS_IGNORED>0</IS_IGNORED>\n  <IS_DISABLED>0</IS_DISABLED>\n</DETECTION>"
+      },
+
+      "detection_with_patch": {
+        "description": "Windows patch finding",
+        "xml": "<DETECTION>\n  <UNIQUE_VULN_ID>6403921864</UNIQUE_VULN_ID>\n  <QID>92305</QID>\n  <TYPE>Confirmed</TYPE>\n  <SEVERITY>4</SEVERITY>\n  <SSL>0</SSL>\n  <RESULTS><![CDATA[Missing Patch/KB: KB5065426\nFile: %windir%\\system32\\ntoskrnl.exe\nInstalled Version: 10.0.26100.4946\nRequired Version: 10.0.26100.6584]]></RESULTS>\n  <STATUS>Active</STATUS>\n  <FIRST_FOUND_DATETIME>2025-09-17T19:13:18Z</FIRST_FOUND_DATETIME>\n  <LAST_FOUND_DATETIME>2025-09-19T17:34:39Z</LAST_FOUND_DATETIME>\n  <TIMES_FOUND>6</TIMES_FOUND>\n  <PATCHABLE>1</PATCHABLE>\n</DETECTION>"
+      },
+
+      "network_detection": {
+        "description": "Network service detection with port",
+        "xml": "<DETECTION>\n  <QID>38173</QID>\n  <TYPE>Confirmed</TYPE>\n  <PORT>445</PORT>\n  <PROTOCOL>tcp</PROTOCOL>\n  <SERVICE>netbios-ssn</SERVICE>\n  <SEVERITY>3</SEVERITY>\n  <STATUS>Active</STATUS>\n  <FIRST_FOUND_DATETIME>2025-08-01T10:00:00Z</FIRST_FOUND_DATETIME>\n  <LAST_FOUND_DATETIME>2025-09-19T10:00:00Z</LAST_FOUND_DATETIME>\n</DETECTION>"
+      },
+
+      "kb_entry_with_cve": {
+        "description": "Knowledge base entry with CVE and CVSS",
+        "xml": "<VULN>\n  <QID>376263</QID>\n  <VULN_TYPE>Vulnerability</VULN_TYPE>\n  <SEVERITY_LEVEL>5</SEVERITY_LEVEL>\n  <TITLE><![CDATA[Microsoft Edge Chromium Remote Code Execution Vulnerability]]></TITLE>\n  <CVE_LIST>\n    <CVE>\n      <ID>CVE-2024-1234</ID>\n      <URL>http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-1234</URL>\n    </CVE>\n  </CVE_LIST>\n  <CVSS_V3>\n    <BASE>9.8</BASE>\n    <TEMPORAL>8.8</TEMPORAL>\n    <VECTOR>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</VECTOR>\n  </CVSS_V3>\n  <PATCHABLE>1</PATCHABLE>\n  <SOLUTION><![CDATA[Install Microsoft Security Update]]></SOLUTION>\n</VULN>"
+      }
+    },
+
+    "mapped_canonical_samples": [
+      {
+        "scanner_source": "qualys",
+        "asset_identifiers": {
+          "ip": "10.0.32.6",
+          "hostname": "01win11crowd.glacialroot.com",
+          "hostId": "534072428",
+          "qgHostId": "1f03279d-8c73-4667-a23e-de35af0ee32d"
+        },
+        "qid": "90007",
+        "cve": [],
+        "vuln_key": "QID-90007",
+        "severity": "low",
+        "status": "open",
+        "detection_type": "Confirmed",
+        "first_seen": "2025-08-26T21:24:10Z",
+        "last_seen": "2025-09-19T17:34:39Z",
+        "times_found": 13,
+        "evidence": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon cachedlogonscount = 10",
+        "patch_available": false,
+        "solution": null,
+        "additional_info": {
+          "uniqueVulnId": "6272615222",
+          "ignored": false,
+          "disabled": false,
+          "os": "Windows 11 Enterprise 64 bit Edition Version 24H2",
+          "osCpe": "cpe:/o:microsoft:windows_11:24H2::x64:"
+        }
+      },
+      {
+        "scanner_source": "qualys",
+        "asset_identifiers": {
+          "ip": "10.0.32.6",
+          "hostname": "01win11crowd.glacialroot.com"
+        },
+        "qid": "92305",
+        "cve": [],
+        "vuln_key": "QID-92305",
+        "severity": "high",
+        "status": "open",
+        "first_seen": "2025-09-17T19:13:18Z",
+        "last_seen": "2025-09-19T17:34:39Z",
+        "evidence": "Missing Patch/KB: KB5065426\nFile: %windir%\\system32\\ntoskrnl.exe\nInstalled Version: 10.0.26100.4946\nRequired Version: 10.0.26100.6584",
+        "patch_available": true,
+        "solution": "Install Windows Update KB5065426"
+      },
+      {
+        "scanner_source": "qualys",
+        "asset_identifiers": {
+          "ip": "192.168.1.100",
+          "hostname": "web-server.example.com"
+        },
+        "qid": "38173",
+        "cve": [],
+        "vuln_key": "QID-38173",
+        "severity": "medium",
+        "status": "open",
+        "location": {
+          "port": 445,
+          "protocol": "tcp",
+          "service": "netbios-ssn"
+        },
+        "first_seen": "2025-08-01T10:00:00Z",
+        "last_seen": "2025-09-19T10:00:00Z",
+        "evidence": "SMB service detected on port 445",
+        "solution": "Restrict SMB access to trusted networks only"
+      },
+      {
+        "scanner_source": "qualys",
+        "asset_identifiers": {
+          "ip": "10.0.1.50",
+          "hostname": "edge-browser.example.com"
+        },
+        "qid": "376263",
+        "cve": ["CVE-2024-1234"],
+        "vuln_key": "CVE-2024-1234",
+        "severity": "critical",
+        "cvss": {
+          "baseScore": 9.8,
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        },
+        "status": "open",
+        "first_seen": "2025-09-01T00:00:00Z",
+        "last_seen": "2025-09-19T00:00:00Z",
+        "patch_available": true,
+        "solution": "Install Microsoft Security Update for Edge Chromium",
+        "additional_info": {
+          "title": "Microsoft Edge Chromium Remote Code Execution Vulnerability",
+          "category": "Web Browser",
+          "vulnType": "Vulnerability"
+        }
+      },
+      {
+        "scanner_source": "qualys",
+        "asset_identifiers": {
+          "ip": "10.0.32.6",
+          "hostname": "01win11crowd.glacialroot.com"
+        },
+        "qid": "91734",
+        "cve": [],
+        "vuln_key": "QID-91734",
+        "severity": "critical",
+        "status": "fixed",
+        "first_seen": "2025-08-26T21:24:10Z",
+        "last_seen": "2025-09-05T10:00:00Z",
+        "last_fixed": "2025-09-05T10:00:00Z",
+        "evidence": "Security update was successfully installed",
+        "solution": "No action required - vulnerability has been remediated"
+      }
+    ],
+
+    "error_responses": {
+      "authentication_failed": {
+        "xml": "<SIMPLE_RETURN>\n  <RESPONSE>\n    <DATETIME>2025-09-19T10:00:00Z</DATETIME>\n    <CODE>1000</CODE>\n    <TEXT>Invalid username or password</TEXT>\n  </RESPONSE>\n</SIMPLE_RETURN>"
+      },
+
+      "rate_limit_exceeded": {
+        "http_code": 429,
+        "headers": {
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Limit": "300",
+          "Retry-After": "3600"
+        },
+        "xml": "<SIMPLE_RETURN>\n  <RESPONSE>\n    <CODE>999</CODE>\n    <TEXT>API rate limit exceeded. Please retry after 1 hour.</TEXT>\n  </RESPONSE>\n</SIMPLE_RETURN>"
+      },
+
+      "invalid_parameter": {
+        "xml": "<SIMPLE_RETURN>\n  <RESPONSE>\n    <CODE>2000</CODE>\n    <TEXT>Invalid parameter: vm_scan_since format must be YYYY-MM-DD</TEXT>\n  </RESPONSE>\n</SIMPLE_RETURN>"
+      },
+
+      "no_data_found": {
+        "xml": "<HOST_LIST_VM_DETECTION_OUTPUT>\n  <RESPONSE>\n    <DATETIME>2025-09-19T10:00:00Z</DATETIME>\n    <HOST_LIST />\n  </RESPONSE>\n</HOST_LIST_VM_DETECTION_OUTPUT>"
+      }
+    },
+
+    "special_cases": {
+      "multiple_cves": {
+        "description": "Detection with multiple CVEs",
+        "xml_snippet": "<CVE_LIST>\n  <CVE><ID>CVE-2024-1234</ID></CVE>\n  <CVE><ID>CVE-2024-5678</ID></CVE>\n  <CVE><ID>CVE-2023-9999</ID></CVE>\n</CVE_LIST>",
+        "mapped_field": {
+          "cve": ["CVE-2024-1234", "CVE-2024-5678", "CVE-2023-9999"],
+          "vuln_key": "CVE-2024-1234"
+        }
+      },
+
+      "reopened_status": {
+        "description": "Previously fixed vulnerability found again",
+        "xml_snippet": "<STATUS>Re-Opened</STATUS>\n<LAST_FIXED_DATETIME>2025-09-01T00:00:00Z</LAST_FIXED_DATETIME>",
+        "mapped_field": {
+          "status": "reopened",
+          "last_fixed": "2025-09-01T00:00:00Z"
+        }
+      },
+
+      "ssl_detection": {
+        "description": "SSL/TLS vulnerability",
+        "xml_snippet": "<PORT>443</PORT>\n<PROTOCOL>tcp</PROTOCOL>\n<SSL>1</SSL>",
+        "mapped_field": {
+          "location": {
+            "port": 443,
+            "protocol": "tcp",
+            "ssl": true
+          }
+        }
+      }
+    },
+
+    "curl_examples": {
+      "basic_request": "curl -u 'username:password' -H 'X-Requested-With: Curl' 'https://qualysapi.qg3.apps.qualys.com/api/2.0/fo/asset/host/vm/detection/?action=list&vm_scan_since=2025-08-20'",
+
+      "json_attempt": "curl -u 'username:password' -H 'Accept: application/json' -H 'X-Requested-With: Curl' 'https://qualysapi.qg3.apps.qualys.com/api/2.0/fo/asset/host/vm/detection/?action=list'",
+
+      "with_pagination": "curl -u 'username:password' -H 'X-Requested-With: Curl' 'https://qualysapi.qg3.apps.qualys.com/api/2.0/fo/asset/host/vm/detection/?action=list&truncation_limit=5000'",
+
+      "specific_hosts": "curl -u 'username:password' -H 'X-Requested-With: Curl' 'https://qualysapi.qg3.apps.qualys.com/api/2.0/fo/asset/host/vm/detection/?action=list&ips=10.0.32.6,10.0.32.7'"
+    }
+  }
+}

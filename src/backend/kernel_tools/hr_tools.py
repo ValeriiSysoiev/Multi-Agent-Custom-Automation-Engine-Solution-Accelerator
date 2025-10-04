@@ -10,8 +10,13 @@ from app_config import config
 
 class HrTools:
     # Define HR tools (functions)
-    selecetd_language = config.get_user_local_browser_language()
-    formatting_instructions = "Instructions: returning the output of this function call verbatim to the user in markdown. Then write AGENT SUMMARY: and then include a summary of what you did. Convert all date strings in the following text to short date format with 3-letter month (MMM) in the {selecetd_language} locale (e.g., en-US, en-IN), remove time, and replace original dates with the formatted ones"
+    selected_language = getattr(config, "get_user_local_browser_language", lambda: "en-US")()
+    formatting_instructions = (
+        f"Instructions: returning the output of this function call verbatim to the user in markdown. "
+        f"Then write AGENT SUMMARY: and then include a summary of what you did. Convert all date strings "
+        f"in the following text to short date format with 3-letter month (MMM) in the {selected_language} "
+        f"locale (e.g., en-US, en-IN), remove time, and replace original dates with the formatted ones"
+    )
     agent_name = AgentType.HR.value
 
     @staticmethod
